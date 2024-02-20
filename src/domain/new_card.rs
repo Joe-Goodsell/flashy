@@ -27,11 +27,11 @@ impl NewCard {
         self.back_text = text;
     }
 
-    pub async fn save(&self, db: &PgPool) -> Result<(), sqlx::Error> {
+    pub async fn save(&self, connection_pool: &PgPool) -> Result<(), sqlx::Error> {
         sqlx::query!(
             r#"
             INSERT INTO cards (id, front_text, back_text, created_at, last_modified)
-            VALUES ($1, $2, $3, $4)
+            VALUES ($1, $2, $3, $4, $5)
             "#,
             self.id,
             self.front_text,
@@ -39,7 +39,7 @@ impl NewCard {
             Utc::now(),
             Utc::now(),
         )
-        .execute(db)
+        .execute(connection_pool)
         .await?;
         Ok(())
     }
