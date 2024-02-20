@@ -8,5 +8,18 @@ edition = "2021"
 [dependencies]
 crossterm = "0.27.0"
 ratatui = "0.26.1"
-sqlx = { version = "0.7.3" }
-tracing = { version = "0.1.40" }
+serde = "1.0.197"
+tokio = "1.36.0"
+
+[dependencies.sqlx]
+version = "0.7.3"
+default-features = false
+features = [
+    "runtime-tokio",
+    "tls-native-tls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "migrate",
+    "macros",
+]
