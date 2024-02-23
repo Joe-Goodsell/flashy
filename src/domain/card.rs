@@ -1,8 +1,8 @@
-use serde::Deserialize;
+use uuid::Uuid;
 
-#[derive(Deserialize, Debug, sqlx::FromRow)]
+#[derive(serde::Deserialize, Debug, sqlx::FromRow)]
 pub struct Card {
     front_text: String,
     back_test: String,
-    id: u64,
+    id: Uuid,
 }
