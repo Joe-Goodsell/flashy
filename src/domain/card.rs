@@ -1,8 +1,13 @@
+use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-#[derive(serde::Deserialize, Debug, sqlx::FromRow)]
+
+#[derive(Debug)]
 pub struct Card {
-    front_text: String,
-    back_test: String,
-    id: Uuid,
+    pub id: Uuid,
+    pub front_text: Option<String>,
+    pub back_text: Option<String>,
+    pub deck_id: Option<Uuid>,
+    pub created: Option<DateTime<Utc>>,
+    pub modified: Option<DateTime<Utc>>,
 }

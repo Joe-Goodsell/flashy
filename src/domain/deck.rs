@@ -1,19 +1,9 @@
-use sqlx::{postgres::PgRow, types::chrono::{DateTime, Local, NaiveDateTime, Utc}, FromRow, PgPool};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::card::Card;
 
-
-pub struct CardRow {
-    pub id: Uuid,
-    pub front_text: Option<String>,
-    pub back_text: Option<String>,
-    pub deck_id: Option<Uuid>,
-    pub created: Option<DateTime<Utc>>,
-    pub modified: Option<DateTime<Utc>>,
-}
-
-#[derive(serde::Deserialize, Debug)]
+#[derive(Debug)]
 pub struct Deck {
     id: Uuid,
     cards: Vec<Card>,
@@ -27,7 +17,7 @@ impl Deck {
         }
     }
 
-    pub async fn fetch_from_db(name: &str, db: &PgPool) -> Result<Self, sqlx::Error> {
+    pub async fn load_from_db(name: &str, db: &PgPool) -> Result<Self, sqlx::Error> {
         // Load table from DB
         let id: Uuid = sqlx::query_scalar::<_, Uuid>(
             r#"
@@ -38,8 +28,8 @@ impl Deck {
         .fetch_one(db)
         .await?;
 
-        let rows: Vec<CardRow> = sqlx::query_as!(
-            CardRow,
+        let cards: Vec<Card> = sqlx::query_as!(
+            Card,
             r#"
             SELECT * FROM cards
             WHERE deck_id = $1
@@ -49,13 +39,7 @@ impl Deck {
         .fetch_all(db)
         .await?;
 
-        // let cards = Vec::<Card>::new();
-        // for row in &rows {
-        //     if let Ok(card) = Card::from_row(row) {
-        //         cards.push(card);
-        //     }
-        // }
-        Ok(Deck { id, cards: Vec::<Card>::new()})
+        Ok(Deck { id, cards })
     }
 
     pub fn load(name: &str) -> Result<Self, std::io::Error> {
