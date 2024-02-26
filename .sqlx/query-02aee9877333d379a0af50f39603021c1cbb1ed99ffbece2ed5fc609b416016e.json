@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT * FROM cards\n            WHERE deck_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "front_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "back_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "deck_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "created",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "modified",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "02aee9877333d379a0af50f39603021c1cbb1ed99ffbece2ed5fc609b416016e"
+}
