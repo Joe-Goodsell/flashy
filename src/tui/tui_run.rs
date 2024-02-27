@@ -1,7 +1,8 @@
 use super::event_handler::{self, Event};
+use super::utils::Tui;
 use color_eyre::eyre;
 use crossterm::event::KeyCode::Char;
-use ratatui::{backend::CrosstermBackend, widgets::{Block, Borders, Paragraph}, Frame, Terminal};
+use ratatui::{widgets::{Block, Borders, Paragraph}, Frame};
 
 // Stores application state; for now just a simple u8 counter
 #[derive(Debug, Default)]
@@ -25,25 +26,21 @@ impl App {
         Ok(())
     }
 
-    pub async fn run(mut self) -> eyre::Result<()> {
+    pub async fn run(mut self, mut term: Tui) -> eyre::Result<()> {
         // Event handler
         let mut events = event_handler::EventHandler::default();
 
-        // ratatui terminal
-        let mut t = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
-
-        loop {
+        while !self.should_quit {
+            // Check events
             let event = events.next().await?;
 
+            // Update application state
             self.update(event)?;
 
-            t.draw(|f| {
+            // Render
+            term.draw(|f| {
                 ui(f, &self);
             })?;
-
-            if self.should_quit {
-                break;
-            }
         }
         Ok(())
     }

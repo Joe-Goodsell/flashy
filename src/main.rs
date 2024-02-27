@@ -1,22 +1,21 @@
-use std::io::{self, stdout};
-
-use crossterm::{
-    event::{self, Event, KeyCode},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    ExecutableCommand,
-};
-use flashy::tui;
-use ratatui::{prelude::*, widgets::*};
+use std::io;
+use flashy::tui::{utils::*, tui_run::App};
 
 #[tracing::instrument]
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    // TELEMETRY
     flashy::telemetry::initialise_subscriber();
     tracing::info!("TESTING TELEMETRY");
-    enable_raw_mode()?;
-    let app = tui::tui_run::App::default();
-    let _result = app.run().await;
-    disable_raw_mode()?;
-    stdout().execute(LeaveAlternateScreen)?;
+
+    // INITIALISE APP & TERMINAL
+    let app = App::default();
+    let term = init().expect("Failed to intialise terminal");
+
+    // RUN
+    let _result = app.run(term).await;
+
+    // CLEANUP
+    let _ = restore();
     Ok(())
 }
