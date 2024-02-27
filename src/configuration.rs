@@ -28,7 +28,7 @@ impl DatabaseSettings {
             .host(&self.host)
             .port(self.port)
             .database(&self.database_name)
-            .password(&self.password.expose_secret())
+            .password(self.password.expose_secret())
     }
 }
 
@@ -40,8 +40,5 @@ pub fn get_config() -> Result<Settings, config::ConfigError> {
         .add_source(config::File::from(config_dir.join("config.yaml"))).build()?;
 
     //TODO: add telemetry
-    match config.try_deserialize::<Settings>() {
-        Ok(settings) => Ok(settings),
-        Err(e) => Err(e),
-    }
+    config.try_deserialize::<Settings>()
 } 

@@ -6,17 +6,29 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+### CONFIG
 config = "0.14.0"
-crossterm = "0.27.0"
+
+### TUI
+crossterm = { version = "0.27.0", features = [ "event-stream" ] }
 ratatui = "0.26.1"
+color-eyre = "0.6.2"
+
 secrecy = { version="0.8.0", features=[ "serde" ] }
 serde = "1.0.197"
 uuid = { version = "1.7.0", features = [ "v4", "serde" ] }
+
+### TELEMETRY
 tracing = "0.1"
 tracing-subscriber = { version = "0.3" }
 
+
+futures = "0.3.30"
+
 [dependencies.tokio]
 version = "1.36.0"
+features = [ "full" ]
 
 [dependencies.sqlx]
 version = "0.7.3"
