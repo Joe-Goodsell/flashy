@@ -7,7 +7,10 @@ use crossterm::{
 };
 use ratatui::{prelude::*, widgets::*};
 
+#[tracing::instrument]
 fn main() -> io::Result<()> {
+    flashy::telemetry::initialise_subscriber();
+    tracing::info!("TESTING TELEMETRY");
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
