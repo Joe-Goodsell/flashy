@@ -1,3 +1,3 @@
-mod card;
-mod deck;
-mod new_card;
+pub mod card;
+pub mod deck;
+pub mod new_card;

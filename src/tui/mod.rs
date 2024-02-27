@@ -1,3 +1,4 @@
 pub mod event_handler;
-pub mod tui_run;
+pub mod app;
 pub mod utils;
+pub mod screens;

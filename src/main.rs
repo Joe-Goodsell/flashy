@@ -1,5 +1,5 @@
 use std::io;
-use flashy::tui::{utils::*, tui_run::App};
+use flashy::tui::{utils::*, app::App};
 
 #[tracing::instrument]
 #[tokio::main]
