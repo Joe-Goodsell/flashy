@@ -1,7 +1,7 @@
 use std::io::{stdout, Stdout};
 
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{backend::CrosstermBackend, layout::{Constraint, Direction, Layout, Rect}, Terminal};
 
 
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;
@@ -19,4 +19,25 @@ pub fn restore() -> std::io::Result<()> {
     crossterm::execute!(stdout(), LeaveAlternateScreen)?;
     disable_raw_mode()?;
     Ok(())
+}
+
+
+pub fn create_centred_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    // First split vertical (i.e. splits stack on top of each other)
+    // Popup will fill `percent_y` proportion of screen
+    let centre_rect = Layout::default().direction(Direction::Vertical)
+        .constraints(vec![
+            Constraint::Percentage((100-percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100-percent_y) / 2), 
+        ])
+        .split(area);
+
+    Layout::default().direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Percentage((100-percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100-percent_x) / 2),
+            ])
+            .split(centre_rect[1])[1] // Only take middle rectangles
 }
