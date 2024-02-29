@@ -1,11 +1,14 @@
 use super::event_handler::{self, Event};
-use super::screens::create_card::{CreateCard, CurrentlyEditing};
+use super::screens::create_card::{self, CreateCard, CurrentlyEditing};
+use super::screens::statusbar::StatusBar;
 use super::utils::Tui;
 use crate::domain::deck::Deck;
 use super::screens::main_screen::MainScreen;
 use color_eyre::eyre;
 use crossterm::event::{self, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::event::KeyCode::Char;
+use ratatui::layout::{Constraint, Direction, Layout};
+use std::fmt::Display;
 
 use ratatui::widgets::StatefulWidget;
 // UI
@@ -38,27 +41,49 @@ pub enum CurrentScreen {
     Welcome,
 }
 
+#[derive(Debug, Default, Clone)]
+pub enum Mode {
+    #[default]
+    NORMAL,
+    INSERT,
+}
+
+impl Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str_rep = match self {
+            Mode::NORMAL => "NORMAL",
+            Mode::INSERT => "INSERT",
+        };
+        f.write_str(str_rep)
+    }
+}
+
 
 // Stores application state
 #[derive(Debug, Default)]
 pub struct App{
     pub current_screen: CurrentScreen,
+    pub create_screen: Option<CreateCard>,
+    pub mode: Mode,
     pub should_quit: bool,
     pub deck: Option<Deck>,
 }
 
-// impl Default for App {
-//     fn default() -> Self {
-//         Self { current_screen: CurrentScreen::default(), should_quit: false, deck: None }
-//     }
-// }
-
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
 
-        //screen.render(area, buf);
+        let layout = Layout::default().direction(Direction::Vertical).constraints(vec![
+            Constraint::Percentage(100),
+            Constraint::Min(1),
+        ]).margin(1)
+        .split(area);
+        
+        let (main_area, statusbar_area) = (layout[0], layout[1]);
 
-        match self.current_screen {
+        // Renders StatusBar
+        StatusBar::new(self.mode.clone()).render(statusbar_area, buf);
+
+        match &self.current_screen {            
             CurrentScreen::Main => {
                 let title = Title::from(" Flashy ".bold());
                 let instructions = Title::from(Line::from(vec![
@@ -86,12 +111,14 @@ impl Widget for &App {
                 Paragraph::new(counter_text)
                     .block(block)
                     .centered()
-                    .render(area, buf);
+                    .render(main_area, buf);
             },
             CurrentScreen::Create => {
-                let mut create_card = CreateCard::default();
                 let mut state = CurrentlyEditing::FrontText;
-                create_card.render(area, buf, &mut state)
+                
+                if let Some(create_screen) = &self.create_screen {
+                    create_screen.render(main_area, buf, &mut state);
+                };
             },
             CurrentScreen::Welcome => {
                 let title = Title::from(" Flashy ".bold());
@@ -112,7 +139,7 @@ impl Widget for &App {
                     Span::styled("WELCOME TO FLASHY!", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD).add_modifier(Modifier::ITALIC).add_modifier(Modifier::RAPID_BLINK))])
                 ]).alignment(Alignment::Center);
 
-                Paragraph::new(body_text).block(block).centered().render(area, buf);
+                Paragraph::new(body_text).block(block).centered().render(main_area, buf);
             },
             _ => {},
         }
@@ -130,11 +157,46 @@ impl App {
 
     fn update(&mut self, event: Event) -> eyre::Result<()> {
         if let Event::Key(key) = event {
-            match key.code {
-                Char('q') => self.should_quit = true,
-                Char('e') => self.current_screen = CurrentScreen::Create,
-                KeyCode::Esc => self.current_screen = CurrentScreen::Main,
-                _ => {},
+            match &self.current_screen {
+                CurrentScreen::Main => {
+                    match &key.code {
+                        Char('q') => self.should_quit = true,
+                        Char('e') => self.current_screen = CurrentScreen::Create,
+                        KeyCode::Esc => self.current_screen = CurrentScreen::Main,
+                        _ => {},
+                    }
+                },
+                CurrentScreen::Create=> {
+                    if let Some(create_card) = &mut self.create_screen {
+                        match self.mode {
+                            Mode::NORMAL => {
+                                match &key.code {
+                                    Char('q') => self.should_quit = true,
+                                    Char('i') => self.mode = Mode::INSERT,
+                                    KeyCode::Tab => {
+                                        create_card.toggle_field();
+                                    }, 
+                                    KeyCode::Esc => self.current_screen = CurrentScreen::Main,
+                                    _ => {},
+                                }
+                            },
+                            Mode::INSERT => {
+                                #[allow(clippy::single_match)]
+                                match &key.code {
+                                    KeyCode::Esc => self.mode = Mode::NORMAL,
+                                    KeyCode::Backspace => create_card.pop_char(),
+                                    Char(ch) => create_card.push_char(*ch),
+                                    _ => {},//TODO:
+                                }
+                            }, 
+                        }
+
+                    } else {
+                        self.create_screen = Some(CreateCard::default()); // WARN: skippin a frame here for no reason
+                    }
+                },
+                CurrentScreen::Welcome => self.current_screen = CurrentScreen::Main,
+                _ => self.current_screen = CurrentScreen::Main,
             }
         }
         Ok(())
@@ -156,30 +218,25 @@ impl App {
             term.draw(|f| {
                 self.render_frame(f)
             })?;
-            self.handle_events()?;
+            // self.handle_events()?;
         }
         Ok(())
     }
 
-    fn handle_events(&mut self) -> std::io::Result<()> {
-        match event::read()? {
-            crossterm::event::Event::Key(key_event) if key_event.kind== KeyEventKind::Press => {
-                self.handle_key_event(key_event)
-            },
-            _ => {},
-        };
-        //TODO:
-        Ok(())
-    }
+    // fn handle_events(&mut self) -> std::io::Result<()> {
+    //     match event::read()? {
+    //         crossterm::event::Event::Key(key_event) if key_event.kind== KeyEventKind::Press => {
+    //             self.handle_key_event(key_event)
+    //         },
+    //         _ => {},
+    //     };
+    //     //TODO:
+    //     Ok(())
+    // }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            Char('q') => self.should_quit = true,
-            Char('e') => self.current_screen = CurrentScreen::Create,
-            KeyCode::Esc => self.current_screen = CurrentScreen::Main,
-            _ => {},
-        }
-    }
+    // fn handle_key_event(&mut self, key_event: KeyEvent) {
+    //     unimplemented!()
+    // }
 
     fn render_frame(&self, frame: &mut Frame) {
         frame.render_widget(self, frame.size());
