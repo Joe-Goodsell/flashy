@@ -1,4 +1,10 @@
-use ratatui::{buffer::Buffer, layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::Span, widgets::{Block, Borders, Padding, Paragraph, StatefulWidget, Widget}};
+use ratatui::{
+    buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
+    text::Span,
+    widgets::{Block, Borders, Padding, Paragraph, StatefulWidget, Widget},
+};
 
 use crate::tui::{app::Mode, utils::create_centred_rect};
 
@@ -41,12 +47,19 @@ impl StatefulWidget for &CreateCard {
         let popup_area: Rect = create_centred_rect(50u16, 50u16, area);
 
         let block = Block::default()
-            .title(Span::styled("Add a card", Style::default().fg(Color::Yellow).bg(Color::Black)))
+            .title(Span::styled(
+                "Add a card",
+                Style::default().fg(Color::Yellow).bg(Color::Black),
+            ))
             .borders(Borders::ALL)
             .style(Style::default().bg(Color::DarkGray));
 
-        let text_fields = Layout::default().direction(Direction::Horizontal).constraints(vec![
-                Constraint::Percentage(50u16), Constraint::Percentage(50u16)])
+        let text_fields = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Percentage(50u16),
+                Constraint::Percentage(50u16),
+            ])
             .margin(2)
             .split(popup_area);
         let text_field_block = Block::default()
@@ -54,31 +67,36 @@ impl StatefulWidget for &CreateCard {
             .padding(Padding::uniform(1));
 
         let (front_text, back_text) = match self.state {
-            CurrentlyEditing::FrontText => 
-                (Span::styled(self.front_field.clone(), TEXTBOX_STYLE_EDITING), 
-                Span::styled(self.back_field.clone(), TEXTBOX_STYLE_VIEWING)),
-            CurrentlyEditing::BackText => 
-                (Span::styled(self.front_field.clone(), TEXTBOX_STYLE_VIEWING), 
-                Span::styled(self.back_field.clone(), TEXTBOX_STYLE_EDITING)),
-            CurrentlyEditing::Saving =>
-                (Span::styled(self.front_field.clone(), TEXTBOX_STYLE_VIEWING), 
-                Span::styled(self.back_field.clone(), TEXTBOX_STYLE_VIEWING)),
+            CurrentlyEditing::FrontText => (
+                Span::styled(self.front_field.clone(), TEXTBOX_STYLE_EDITING),
+                Span::styled(self.back_field.clone(), TEXTBOX_STYLE_VIEWING),
+            ),
+            CurrentlyEditing::BackText => (
+                Span::styled(self.front_field.clone(), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.back_field.clone(), TEXTBOX_STYLE_EDITING),
+            ),
+            CurrentlyEditing::Saving => (
+                Span::styled(self.front_field.clone(), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.back_field.clone(), TEXTBOX_STYLE_VIEWING),
+            ),
         };
 
         //POPUP
         Paragraph::default().block(block).render(popup_area, buf);
         //FRONT_TEXT
-        Paragraph::new(front_text).block(text_field_block.clone()).render(text_fields[0], buf);
+        Paragraph::new(front_text)
+            .block(text_field_block.clone())
+            .render(text_fields[0], buf);
         //BACK_FRONT
-        Paragraph::new(back_text).block(text_field_block).render(text_fields[1], buf);
+        Paragraph::new(back_text)
+            .block(text_field_block)
+            .render(text_fields[1], buf);
     }
-
 }
 
 impl CreateCard {
     //TODO: implement saving to db
-    
-    
+
     pub fn toggle_field(&mut self) {
         tracing::info!("TOGGLING CREATE CARD FIELD");
         self.state = match self.state {
@@ -87,12 +105,12 @@ impl CreateCard {
         };
     }
 
-    pub fn push_char(&mut self, ch: char){
+    pub fn push_char(&mut self, ch: char) {
         tracing::info!("{}", format!("pushing '{}' to {:?}", ch, self.state));
         match self.state {
             CurrentlyEditing::FrontText => self.front_field.push(ch),
             CurrentlyEditing::BackText => self.back_field.push(ch),
-            CurrentlyEditing::Saving => {},
+            CurrentlyEditing::Saving => {}
         }
     }
 
@@ -101,7 +119,7 @@ impl CreateCard {
         match self.state {
             CurrentlyEditing::FrontText => _ = self.front_field.pop(),
             CurrentlyEditing::BackText => _ = self.back_field.pop(),
-            _ => {},
+            _ => {}
         }
     }
 }
