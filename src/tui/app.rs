@@ -1,12 +1,11 @@
 use super::event_handler::{self, Event};
-use super::screens::create_card::{self, CreateCard, CurrentlyEditing};
-use super::screens::main_screen::MainScreen;
+use super::screens::create_card::{CreateCard, CurrentlyEditing};
 use super::screens::statusbar::StatusBar;
 use super::utils::Tui;
 use crate::domain::deck::Deck;
 use color_eyre::eyre;
+use crossterm::event::KeyCode;
 use crossterm::event::KeyCode::Char;
-use crossterm::event::{self, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::layout::{Constraint, Direction, Layout};
 use std::fmt::Display;
 
