@@ -1,6 +1,6 @@
-use sqlx::{PgPool, Pool, Postgres};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use crate::configuration::DatabaseSettings;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{PgPool, Pool, Postgres};
 
 pub fn acquire_pg_pool(db_settings: &DatabaseSettings) -> PgPool {
     let pg_options: PgConnectOptions = db_settings.get_connect_options();

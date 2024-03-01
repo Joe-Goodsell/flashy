@@ -1,12 +1,12 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::card::Card;
+use super::card::RawCard;
 
 #[derive(Debug)]
 pub struct Deck {
     id: Uuid,
-    cards: Vec<Card>,
+    cards: Vec<RawCard>,
 }
 
 impl Deck {
@@ -23,13 +23,14 @@ impl Deck {
             r#"
             SELECT id FROM decks
             WHERE name = ($1)
-            "#
-        ).bind(name)
+            "#,
+        )
+        .bind(name)
         .fetch_one(db)
         .await?;
 
-        let cards: Vec<Card> = sqlx::query_as!(
-            Card,
+        let cards: Vec<RawCard> = sqlx::query_as!(
+            RawCard,
             r#"
             SELECT * FROM cards
             WHERE deck_id = $1
@@ -46,11 +47,11 @@ impl Deck {
         todo!()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Card> {
+    pub fn iter(&self) -> impl Iterator<Item = &RawCard> {
         self.cards.iter()
     }
 
-    pub fn add(&mut self, card: Card) {
+    pub fn add(&mut self, card: RawCard) {
         self.cards.push(card);
     }
 }

@@ -1,0 +1,6 @@
+database:
+  username: "joe"
+  password: "password"
+  port: 5432
+  host: "localhost"
+  database_name: "cards"

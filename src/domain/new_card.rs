@@ -3,6 +3,8 @@ use sqlx::{
     PgPool,
 };
 
+use crate::tui::screens::create_card::CreateCard;
+
 #[derive(Debug)]
 pub struct NewCard {
     id: Uuid,
@@ -19,6 +21,18 @@ impl NewCard {
             front_text: String::new(),
             back_text: String::new(),
         }
+    }
+
+    pub fn try_from(form_data: &CreateCard) -> Result<Self, String> {
+        let front_text = form_data.front_field.clone();
+        let back_text = form_data.back_field.clone();
+        let deck_id = Uuid::new_v4(); // TODO: IMPLEMENT THIS!
+        Ok(NewCard {
+            id: Uuid::new_v4(),
+            deck_id,
+            front_text,
+            back_text,
+        })
     }
 
     pub fn set_front_text(&mut self, text: String) {

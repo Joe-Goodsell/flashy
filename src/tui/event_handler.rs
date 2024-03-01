@@ -1,8 +1,7 @@
 use color_eyre::eyre;
 use crossterm::event::KeyEvent;
-use tokio::{sync::mpsc, task::JoinHandle};
 use futures::{FutureExt, StreamExt};
-
+use tokio::{sync::mpsc, task::JoinHandle};
 
 #[derive(Debug)]
 pub enum Event {
@@ -28,7 +27,7 @@ impl EventHandler {
     pub fn new(tick_rate: Option<std::time::Duration>) -> Self {
         let tick_rate = match tick_rate {
             Some(tr) => tr,
-            _ => std::time::Duration::from_millis(250)
+            _ => std::time::Duration::from_millis(250),
         };
 
         let (tx, rx) = mpsc::unbounded_channel();
@@ -68,12 +67,19 @@ impl EventHandler {
 
                 }
             }
-        });    
+        });
 
-        Self { _tx, rx, task: Some(task) }
+        Self {
+            _tx,
+            rx,
+            task: Some(task),
+        }
     }
 
     pub async fn next(&mut self) -> eyre::Result<Event> {
-        self.rx.recv().await.ok_or(color_eyre::eyre::eyre!("Unable to get event"))
+        self.rx
+            .recv()
+            .await
+            .ok_or(color_eyre::eyre::eyre!("Unable to get event"))
     }
 }

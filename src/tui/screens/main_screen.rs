@@ -2,7 +2,6 @@ use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 
 use crate::{domain::deck::Deck, tui::app::GetScreen};
 
-
 #[derive(Debug)]
 pub struct MainScreen {
     deck: Option<Deck>, // TODO: MainScreen shouldn't hold `Deck`
@@ -12,7 +11,8 @@ pub struct MainScreen {
 impl Widget for MainScreen {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
-        Self: Sized {
+        Self: Sized,
+    {
         todo!()
     }
 }

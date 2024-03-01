@@ -6,16 +6,21 @@ use ratatui::{
     widgets::{Block, Borders, Padding, Paragraph, StatefulWidget, Widget},
 };
 
-use crate::tui::{app::Mode, utils::create_centred_rect};
+use sqlx::PgPool;
+
+use crate::{
+    domain::new_card::NewCard,
+    tui::{app::Mode, utils::create_centred_rect},
+};
 
 const TEXTBOX_STYLE_EDITING: Style = Style::new().bg(Color::Yellow);
 const TEXTBOX_STYLE_VIEWING: Style = Style::new().bg(Color::LightBlue);
 
 #[derive(Debug, Clone)]
 pub struct CreateCard {
-    front_field: String,
-    back_field: String,
-    mode: Mode,
+    pub front_field: String,
+    pub back_field: String,
+    pub mode: Mode,
     pub state: CurrentlyEditing,
 }
 
@@ -96,6 +101,12 @@ impl StatefulWidget for &CreateCard {
 
 impl CreateCard {
     //TODO: implement saving to db
+
+    pub async fn try_save(&self, db_pool: &PgPool) -> Result<(), sqlx::Error> {
+        let card = NewCard::try_from(&self).unwrap();
+        tracing::info!("SAVING: {:?}", card);
+        card.save(db_pool).await
+    }
 
     pub fn toggle_field(&mut self) {
         tracing::info!("TOGGLING CREATE CARD FIELD");
