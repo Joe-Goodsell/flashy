@@ -6,6 +6,7 @@ use flashy::{
         utils::*,
     },
 };
+use ratatui::widgets::ListState;
 use sqlx::PgPool;
 use std::io;
 
@@ -41,6 +42,8 @@ async fn main() -> io::Result<()> {
         should_quit: false,
         deck: None,
         db_pool: pg_pool,
+        pointer: ListState::default(),
+        n_items: 0,
     };
 
     // RUN

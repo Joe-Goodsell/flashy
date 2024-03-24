@@ -5,12 +5,12 @@ use sqlx::{
 
 use crate::tui::screens::create_card::CreateCard;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct NewCard {
-    id: Uuid,
-    deck_id: Uuid,
-    front_text: String,
-    back_text: String,
+    pub id: Uuid,
+    pub deck_id: Uuid,
+    pub front_text: String,
+    pub back_text: String,
 }
 
 impl NewCard {
@@ -23,10 +23,9 @@ impl NewCard {
         }
     }
 
-    pub fn try_from(form_data: &CreateCard) -> Result<Self, String> {
+    pub fn try_from(form_data: &CreateCard, deck_id: uuid::Uuid) -> Result<Self, String> {
         let front_text = form_data.front_field.clone();
         let back_text = form_data.back_field.clone();
-        let deck_id = Uuid::new_v4(); // TODO: IMPLEMENT THIS!
         Ok(NewCard {
             id: Uuid::new_v4(),
             deck_id,

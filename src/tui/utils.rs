@@ -1,7 +1,7 @@
-use std::io::{stdout, Stdout};
+use std::{cmp::max, io::{stdout, Stdout}};
 
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
-use ratatui::{backend::CrosstermBackend, layout::{Constraint, Direction, Layout, Rect}, Terminal};
+use ratatui::{backend::CrosstermBackend, layout::{Alignment, Constraint, Direction, Layout, Rect}, style::{Style, Stylize}, symbols::border, text::{Line, Text}, widgets::{Block, Borders, Paragraph, StatefulWidget, Widget}, Terminal};
 
 
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;

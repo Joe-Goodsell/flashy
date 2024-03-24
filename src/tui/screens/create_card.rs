@@ -102,8 +102,8 @@ impl StatefulWidget for &CreateCard {
 impl CreateCard {
     //TODO: implement saving to db
 
-    pub async fn try_save(&self, db_pool: &PgPool) -> Result<(), sqlx::Error> {
-        let card = NewCard::try_from(&self).unwrap();
+    pub async fn try_save(&self, db_pool: &PgPool, deck_id: uuid::Uuid) -> Result<(), sqlx::Error> {
+        let card = NewCard::try_from(&self, deck_id).unwrap();
         tracing::info!("SAVING: {:?}", card);
         card.save(db_pool).await
     }

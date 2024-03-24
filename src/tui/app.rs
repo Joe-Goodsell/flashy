@@ -8,8 +8,9 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyCode::Char;
 use ratatui::layout::{Constraint, Direction, Layout};
 use std::fmt::Display;
+use uuid::Uuid;
 
-use ratatui::widgets::StatefulWidget;
+use ratatui::widgets::{List, ListDirection, ListState, StatefulWidget};
 // UI
 use ratatui::{
     buffer::Buffer,
@@ -65,10 +66,12 @@ pub struct App {
     pub should_quit: bool,
     pub deck: Option<Deck>,
     pub db_pool: PgPool, // TODO: should be optional?
+    pub pointer: ListState,
+    pub n_items: usize, // number of items, e.g. list items, currently displayed
 }
 
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+impl Widget for &mut App {
+    fn render(mut self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)])
@@ -76,6 +79,10 @@ impl Widget for &App {
             .split(area);
 
         let (main_area, statusbar_area) = (layout[0], layout[1]);
+
+
+        // seems bad
+        self.n_items = 0usize;
 
         // Renders StatusBar
         StatusBar::new(self.mode.clone()).render(statusbar_area, buf);
@@ -95,20 +102,25 @@ impl Widget for &App {
                     .borders(Borders::ALL)
                     .border_set(border::THICK);
 
-                let cards: Vec<Line> = match &self.deck {
+                // help
+                let cards: Vec<String> = match &self.deck {
                     Some(d) => d
                         .iter()
-                        .map(|c| Line::from(c.front_text.clone().unwrap_or("".to_string())))
-                        .collect(),
-                    _ => vec![Line::from("DECK IS EMPTY")],
+                        .map(|it| 
+                            it.front_text.clone().unwrap_or("NO TEXT".to_string())
+                        ).collect(),
+                    None => vec!["NO CARDS FOUND".to_string()],
                 };
 
-                let counter_text = Text::from(cards);
+                self.n_items = cards.len();
 
-                Paragraph::new(counter_text)
+                let list = List::new(cards)
                     .block(block)
-                    .centered()
-                    .render(main_area, buf);
+                    // .highlight_style(Style::new().add_modifier(Modifier::REVERSED))
+                    .highlight_symbol(">>")
+                    .repeat_highlight_symbol(true);
+
+                ratatui::widgets::StatefulWidget::render(list, area, buf, &mut self.pointer);
             }
             CurrentScreen::Create => {
                 let mut state = CurrentlyEditing::FrontText;
@@ -154,21 +166,57 @@ impl Widget for &App {
 }
 
 impl App {
-    async fn fetch_deck(&mut self, db: &PgPool) -> Result<(), sqlx::Error> {
-        let deck = Deck::load_from_db("default", db).await?;
-        self.deck = Some(deck);
+    /// Loads deck from name, if it doesn't exist, creates a new one named "default"
+    /// And saves to DB.
+    async fn fetch_deck(&mut self, name: &str) -> Result<(), sqlx::Error> {
+        match Deck::load_from_db(name, &self.db_pool).await {
+            Ok(deck) => self.deck = Some(deck),
+            Err(e) => match e {
+                sqlx::Error::RowNotFound => {
+                    tracing::info!("Deck not found, creating new one.");
+                    let new_deck = Deck::default();
+                    new_deck.save_to_db(&self.db_pool).await?;
+                    self.deck = Some(new_deck);
+                }
+                _ => return Err(e),
+            },
+        }
         Ok(())
     }
 
     async fn update(&mut self, event: Event) -> eyre::Result<()> {
         if let Event::Key(key) = event {
             match &self.current_screen {
+                // Main screen lists cards
                 CurrentScreen::Main => match &key.code {
                     Char('q') => self.should_quit = true,
                     Char('e') => self.current_screen = CurrentScreen::Create,
+                    Char('j') => {
+                        // how to set back to None?
+                        if self.n_items != 0 {
+                            let selected = match self.pointer.selected() {
+                                Some(val) => {
+                                    if val < self.n_items - 1 {
+                                        val + 1
+                                    } else {
+                                        val
+                                    }
+                                },
+                                None => 0usize,
+                            };
+                            self.pointer.select(Some(selected));
+                        }
+                    },
+                    Char('k') => {
+                        if let Some(val) = self.pointer.selected() {
+                            self.pointer.select(Some(val.saturating_sub(1)));
+                        }
+                    },
                     KeyCode::Esc => self.current_screen = CurrentScreen::Main,
                     _ => {}
                 },
+
+                // Create screen allows creation of new flashcard
                 CurrentScreen::Create => {
                     if let Some(create_card) = &mut self.create_screen {
                         match self.mode {
@@ -179,7 +227,29 @@ impl App {
                                     create_card.toggle_field();
                                 }
                                 KeyCode::Enter => {
-                                    create_card.try_save(&self.db_pool).await;
+                                    match &self.deck {
+                                        Some(deck) => {
+                                            match create_card.try_save(&self.db_pool, deck.id).await
+                                            {
+                                                Ok(_) => {
+                                                    self.deck = Some(
+                                                        Deck::load_from_db(
+                                                            "default",
+                                                            &self.db_pool,
+                                                        )
+                                                        .await?,
+                                                    );
+                                                    self.current_screen = CurrentScreen::Main;
+                                                    self.create_screen = None;
+                                                }
+                                                Err(e) => {
+                                                    // TODO: implement error popup
+                                                    tracing::error!("Error saving card: {}", e);
+                                                }
+                                            }
+                                        }
+                                        _ => (),
+                                    };
                                 }
                                 KeyCode::Esc => self.current_screen = CurrentScreen::Main,
                                 _ => {}
@@ -208,6 +278,13 @@ impl App {
     pub async fn run(mut self, mut term: Tui) -> eyre::Result<()> {
         // Event handler
         let mut events = event_handler::EventHandler::default();
+        match self.fetch_deck("default").await {
+            Ok(_) => {}
+            Err(e) => {
+                // TODO: HANDLE ERROR PROPERLY
+                tracing::info!("COULD NOT FETCH DECK WITH ERROR {}", e);
+            }
+        };
 
         while !self.should_quit {
             // Check events
@@ -218,7 +295,7 @@ impl App {
 
             // Render
             // Must only call `draw()` once per pass; should render whole frame
-            term.draw(|f| self.render_frame(f))?;
+            term.draw(|f| f.render_widget(&mut self, f.size()))?;
             // self.handle_events()?;
         }
         Ok(())
@@ -238,8 +315,4 @@ impl App {
     // fn handle_key_event(&mut self, key_event: KeyEvent) {
     //     unimplemented!()
     // }
-
-    fn render_frame(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.size());
-    }
 }
