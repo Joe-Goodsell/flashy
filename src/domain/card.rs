@@ -1,7 +1,7 @@
 use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RawCard {
     pub id: Uuid,
     pub front_text: Option<String>,

@@ -38,6 +38,7 @@ async fn main() -> io::Result<()> {
     let app = App {
         current_screen: CurrentScreen::default(),
         create_screen: None,
+        create_deck: None,
         mode: Mode::default(),
         should_quit: false,
         deck: None,

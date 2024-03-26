@@ -4,7 +4,7 @@ use super::deckset::RawDeck;
 
 use super::card::RawCard;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Deck {
     pub id: Uuid,
     pub name: String,
@@ -16,7 +16,7 @@ impl From<&RawDeck> for Deck {
     /// Deck is created *without* cards loaded from db!
     fn from(value: &RawDeck) -> Self {
         Deck {
-            id: value.id.clone(),
+            id: value.id,
             name: value.name.clone(),
             cards: None,
         }
@@ -33,9 +33,19 @@ impl Default for Deck {
             cards: None,
         }
     }
+
 }
 
 impl Deck {
+    pub fn new(name: &str) -> Self {
+        let id = Uuid::new_v4();
+        Deck {
+            id,
+            name: name.to_string(),
+            cards: None
+        }
+    }
+
     pub async fn load_cards(&mut self, db: &PgPool) -> Result<(), sqlx::Error> {
         let cards: Vec<RawCard> = sqlx::query_as!(
             RawCard,

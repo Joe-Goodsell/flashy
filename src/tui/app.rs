@@ -1,5 +1,6 @@
 use super::event_handler::{self, Event};
 use super::screens::create_card::{CreateCard, CurrentlyEditing};
+use super::screens::create_deck::{self, CreateDeck};
 use super::screens::statusbar::StatusBar;
 use super::utils::Tui;
 use crate::domain::deck::Deck;
@@ -38,6 +39,7 @@ pub enum CurrentScreen {
     DECKS,
     CARDS,
     CreateCard,
+    CreateDeck,
     #[default]
     WELCOME,
 }
@@ -63,9 +65,16 @@ impl Display for Mode {
 #[derive(Debug)]
 pub struct App {
     pub current_screen: CurrentScreen,
+    
+
+    // TODO: look up ratatui docs to see if this is right approach
     pub create_screen: Option<CreateCard>,
+    pub create_deck: Option<CreateDeck>,
+
     pub mode: Mode,
     pub should_quit: bool,
+
+    // I don't want to clone the Deck, but don't know how to avoid it...?
     pub deck: Option<Deck>,
     pub deckset: Option<DeckSet>,
     pub db_pool: PgPool, // TODO: should be optional?
@@ -132,7 +141,7 @@ impl Widget for &mut App {
             }
             CurrentScreen::DECKS => {
                 let title = Title::from("DECKS".to_string());
-                let instructions = Title::from(Line::from(vec!["Do something".into()]));
+                let instructions = Title::from(Line::from(vec!["press [ n ] to create new deck!".into()]));
 
                 let block = Block::default()
                     .title(title.alignment(Alignment::Center))
@@ -162,6 +171,19 @@ impl Widget for &mut App {
 
                 ratatui::widgets::StatefulWidget::render(list, area, buf, &mut self.pointer);
             }
+
+
+
+            CurrentScreen::CreateDeck => {
+                if let Some(create_deck) = &self.create_deck {
+                    create_deck.render(main_area, buf);
+                } else {
+                    self.create_deck = Some(CreateDeck::default());
+                }
+            }
+
+
+
             CurrentScreen::CreateCard => {
                 let mut state = CurrentlyEditing::FrontText;
 
@@ -263,7 +285,59 @@ impl App {
                             self.pointer.select(Some(val.saturating_sub(1)));
                         }
                     },
+                    Char('n') => {
+                        // Create new deck
+                        self.current_screen = CurrentScreen::CreateDeck;
+                    },
+                    KeyCode::Enter => {
+                        // TODO: go to `cards` screen for current deck
+                        match &self.deckset {
+                            // Check we have a deckset
+                            Some(deckset) => {
+                                // Check we have a valid "pointer" to selected deck
+                                if let Some(curr_deck) = deckset.decks.get(self.pointer.selected().unwrap_or(0usize)) {
+                                    self.deck = Some(curr_deck.clone());
+                                    self.current_screen = CurrentScreen::CARDS;
+                                };
+                            },
+                            None => {},
+                        }
+                    }
                     _ => {}
+                },
+                
+                // CREATE NEW DECK
+                CurrentScreen::CreateDeck => {
+                    if let Some(create_deck) = &mut self.create_deck {
+                        match self.mode {
+                            Mode::NORMAL => match &key.code {
+                                KeyCode::Enter => {
+                                    match create_deck.try_save(&self.db_pool).await
+                                    {
+                                        Ok(_) => {
+                                            self.current_screen = CurrentScreen::DECKS;
+                                            self.create_deck = None;
+                                            self.fetch_decks().await.unwrap();
+                                        }
+                                        Err(e) => {
+                                            // TODO: implement error popup
+                                            tracing::error!("Error saving deck: {}", e);
+                                        }
+                                    }
+                                },
+                                Char('i') => self.mode = Mode::INSERT,
+                                Char('q') => self.should_quit = true,
+                                KeyCode::Esc => self.current_screen = CurrentScreen::DECKS,
+                                _ => {},
+                            }
+                            Mode::INSERT => match &key.code {
+                                KeyCode::Backspace => create_deck.pop_char(),
+                                Char(ch) => create_deck.push_char(*ch),
+                                KeyCode::Esc => self.mode = Mode::NORMAL,
+                                _ => {},
+                            },
+                        }
+                    }
                 },
 
                 // Create screen allows creation of new flashcard
@@ -282,13 +356,6 @@ impl App {
                                             match create_card.try_save(&self.db_pool, deck.id).await
                                             {
                                                 Ok(_) => {
-                                                    self.deck = Some(
-                                                        Deck::new_from_db(
-                                                            "default",
-                                                            &self.db_pool,
-                                                        )
-                                                        .await?,
-                                                    );
                                                     self.current_screen = CurrentScreen::CARDS;
                                                     self.create_screen = None;
                                                 }

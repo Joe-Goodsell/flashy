@@ -6,7 +6,7 @@ use ratatui::{backend::CrosstermBackend, layout::{Alignment, Constraint, Directi
 
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;
 
-// Initialise the terminal
+/// Initialise the terminal
 pub fn init() -> std::io::Result<Tui> {
     crossterm::execute!(std::io::stdout(), EnterAlternateScreen)?;
     enable_raw_mode()?;
@@ -14,7 +14,7 @@ pub fn init() -> std::io::Result<Tui> {
 }
 
 
-// Restore the terminal to its original state
+/// Restore the terminal to its original state
 pub fn restore() -> std::io::Result<()> {
     crossterm::execute!(stdout(), LeaveAlternateScreen)?;
     disable_raw_mode()?;
