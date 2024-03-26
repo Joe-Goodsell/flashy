@@ -1,5 +1,6 @@
 use sqlx::{types::chrono::Utc, PgPool};
 use uuid::Uuid;
+use super::deckset::RawDeck;
 
 use super::card::RawCard;
 
@@ -7,7 +8,19 @@ use super::card::RawCard;
 pub struct Deck {
     pub id: Uuid,
     pub name: String,
-    pub cards: Vec<RawCard>,
+    pub cards: Option<Vec<RawCard>>,
+}
+
+impl From<&RawDeck> for Deck {
+    /// Creates a Deck from sql query values
+    /// Deck is created *without* cards loaded from db!
+    fn from(value: &RawDeck) -> Self {
+        Deck {
+            id: value.id.clone(),
+            name: value.name.clone(),
+            cards: None,
+        }
+    }
 }
 
 impl Default for Deck {
@@ -17,13 +30,31 @@ impl Default for Deck {
         Deck {
             id,
             name: "default".to_string(),
-            cards: Vec::new(),
+            cards: None,
         }
     }
 }
 
 impl Deck {
-    pub async fn load_from_db(name: &str, db: &PgPool) -> Result<Self, sqlx::Error> {
+    pub async fn load_cards(&mut self, db: &PgPool) -> Result<(), sqlx::Error> {
+        let cards: Vec<RawCard> = sqlx::query_as!(
+            RawCard,
+            r#"
+            SELECT * FROM cards
+            WHERE deck_id = $1
+            "#,
+            self.id,
+        )
+        .fetch_all(db)
+        .await?;
+
+        self.cards = Some(cards);
+        Ok(())
+    }
+
+
+
+    pub async fn new_from_db(name: &str, db: &PgPool) -> Result<Self, sqlx::Error> {
         // Load table from DB
         let id: Uuid = sqlx::query_scalar::<_, Uuid>(
             r#"
@@ -35,22 +66,14 @@ impl Deck {
         .fetch_one(db)
         .await?;
 
-        let cards: Vec<RawCard> = sqlx::query_as!(
-            RawCard,
-            r#"
-            SELECT * FROM cards
-            WHERE deck_id = $1
-            "#,
+        let mut deck = Deck {
             id,
-        )
-        .fetch_all(db)
-        .await?;
-
-        Ok(Deck {
-            id,
-            cards,
             name: name.to_string(),
-        })
+            cards: None,
+        };
+
+        deck.load_cards(db);
+        Ok(deck)
     }
 
     pub async fn save_to_db(&self, pg_pool: &PgPool) -> Result<(), sqlx::Error> {
@@ -80,11 +103,19 @@ impl Deck {
         todo!()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &RawCard> {
-        self.cards.iter()
-    }
+    // TODO: fix this
+    // pub fn iter(&self) -> impl Iterator<Item = &RawCard> {
+    //     self.cards.iter()
+    // }
 
-    pub fn add(&mut self, card: RawCard) {
-        self.cards.push(card);
+    pub fn add(&mut self, card: RawCard) -> Result<(), std::io::Error> {
+        match &mut self.cards {
+            Some(c) => {
+                c.push(card);
+                Ok(())
+            },
+            // TODO: fix error variant
+            None => Err(std::io::Error::new(std::io::ErrorKind::Other, "No cards available")),
+        }
     }
 }

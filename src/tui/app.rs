@@ -3,6 +3,7 @@ use super::screens::create_card::{CreateCard, CurrentlyEditing};
 use super::screens::statusbar::StatusBar;
 use super::utils::Tui;
 use crate::domain::deck::Deck;
+use crate::domain::deckset::DeckSet;
 use color_eyre::eyre;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyCode::Char;
@@ -34,10 +35,11 @@ pub trait GetScreen {
 
 #[derive(Debug, Default)]
 pub enum CurrentScreen {
-    Main,
-    Create,
+    DECKS,
+    CARDS,
+    CreateCard,
     #[default]
-    Welcome,
+    WELCOME,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -65,6 +67,7 @@ pub struct App {
     pub mode: Mode,
     pub should_quit: bool,
     pub deck: Option<Deck>,
+    pub deckset: Option<DeckSet>,
     pub db_pool: PgPool, // TODO: should be optional?
     pub pointer: ListState,
     pub n_items: usize, // number of items, e.g. list items, currently displayed
@@ -88,8 +91,8 @@ impl Widget for &mut App {
         StatusBar::new(self.mode.clone()).render(statusbar_area, buf);
 
         match &self.current_screen {
-            CurrentScreen::Main => {
-                let title = Title::from(" Flashy ".bold());
+            CurrentScreen::CARDS => {
+                let title = Title::from(format!(" CARDS IN {}", self.deck.as_ref().unwrap().name.clone()).bold());
                 let instructions = Title::from(Line::from(vec!["Do something".into()]));
 
                 let block = Block::default()
@@ -104,12 +107,17 @@ impl Widget for &mut App {
 
                 // help
                 let cards: Vec<String> = match &self.deck {
-                    Some(d) => d
-                        .iter()
-                        .map(|it| 
-                            it.front_text.clone().unwrap_or("NO TEXT".to_string())
-                        ).collect(),
-                    None => vec!["NO CARDS FOUND".to_string()],
+                    Some(d) => { // do I have a current deck?
+                        match &d.cards { // does the deck have cards?
+                            Some(c) => {
+                                c.iter()
+                                    .map(|card| card.front_text.clone().unwrap())
+                                    .collect()
+                            },
+                            None => vec!["NO CARDS IN DECK".to_string()],
+                        }
+                    },
+                    None => vec!["NO DECK FOUND".to_string()],
                 };
 
                 self.n_items = cards.len();
@@ -122,14 +130,46 @@ impl Widget for &mut App {
 
                 ratatui::widgets::StatefulWidget::render(list, area, buf, &mut self.pointer);
             }
-            CurrentScreen::Create => {
+            CurrentScreen::DECKS => {
+                let title = Title::from("DECKS".to_string());
+                let instructions = Title::from(Line::from(vec!["Do something".into()]));
+
+                let block = Block::default()
+                    .title(title.alignment(Alignment::Center))
+                    .title(
+                        instructions
+                            .alignment(Alignment::Center)
+                            .position(Position::Bottom),
+                    )
+                    .borders(Borders::ALL)
+                    .border_set(border::THICK);
+
+                // help
+                let decklist: Vec<String> = match &self.deckset {
+                    Some(d) => {
+                        d.decks.iter().map(|deck| deck.name.clone()).collect()
+                    }, 
+                    None => vec!["NO DECKS FOUND".to_string()],
+                };
+
+                self.n_items = decklist.len();
+
+                let list = List::new(decklist)
+                    .block(block)
+                    // .highlight_style(Style::new().add_modifier(Modifier::REVERSED))
+                    .highlight_symbol(">>")
+                    .repeat_highlight_symbol(true);
+
+                ratatui::widgets::StatefulWidget::render(list, area, buf, &mut self.pointer);
+            }
+            CurrentScreen::CreateCard => {
                 let mut state = CurrentlyEditing::FrontText;
 
                 if let Some(create_screen) = &self.create_screen {
                     create_screen.render(main_area, buf, &mut state);
                 };
             }
-            CurrentScreen::Welcome => {
+            CurrentScreen::WELCOME => {
                 let title = Title::from(" Flashy ".bold());
                 let instructions =
                     Title::from(Line::from(vec!["Press any key to get started".into()]));
@@ -166,10 +206,21 @@ impl Widget for &mut App {
 }
 
 impl App {
+    // TODO: make names clearer
+    /// Fetches a `DeckSet` containing all saved decks (without loading cards)
+    async fn fetch_decks(&mut self) -> Result<(), sqlx::Error> {
+        match DeckSet::load_from_db(&self.db_pool).await {
+            Ok(deckset) => self.deckset = Some(deckset),
+            Err(e) => return Err(e),
+        }
+        Ok(())
+    }
+
+
     /// Loads deck from name, if it doesn't exist, creates a new one named "default"
     /// And saves to DB.
     async fn fetch_deck(&mut self, name: &str) -> Result<(), sqlx::Error> {
-        match Deck::load_from_db(name, &self.db_pool).await {
+        match Deck::new_from_db(name, &self.db_pool).await {
             Ok(deck) => self.deck = Some(deck),
             Err(e) => match e {
                 sqlx::Error::RowNotFound => {
@@ -188,9 +239,9 @@ impl App {
         if let Event::Key(key) = event {
             match &self.current_screen {
                 // Main screen lists cards
-                CurrentScreen::Main => match &key.code {
+                CurrentScreen::DECKS => match &key.code {
                     Char('q') => self.should_quit = true,
-                    Char('e') => self.current_screen = CurrentScreen::Create,
+                    Char('e') => self.current_screen = CurrentScreen::CreateCard,
                     Char('j') => {
                         // how to set back to None?
                         if self.n_items != 0 {
@@ -212,12 +263,11 @@ impl App {
                             self.pointer.select(Some(val.saturating_sub(1)));
                         }
                     },
-                    KeyCode::Esc => self.current_screen = CurrentScreen::Main,
                     _ => {}
                 },
 
                 // Create screen allows creation of new flashcard
-                CurrentScreen::Create => {
+                CurrentScreen::CreateCard => {
                     if let Some(create_card) = &mut self.create_screen {
                         match self.mode {
                             Mode::NORMAL => match &key.code {
@@ -233,13 +283,13 @@ impl App {
                                             {
                                                 Ok(_) => {
                                                     self.deck = Some(
-                                                        Deck::load_from_db(
+                                                        Deck::new_from_db(
                                                             "default",
                                                             &self.db_pool,
                                                         )
                                                         .await?,
                                                     );
-                                                    self.current_screen = CurrentScreen::Main;
+                                                    self.current_screen = CurrentScreen::CARDS;
                                                     self.create_screen = None;
                                                 }
                                                 Err(e) => {
@@ -251,7 +301,7 @@ impl App {
                                         _ => (),
                                     };
                                 }
-                                KeyCode::Esc => self.current_screen = CurrentScreen::Main,
+                                KeyCode::Esc => self.current_screen = CurrentScreen::CARDS,
                                 _ => {}
                             },
                             Mode::INSERT => {
@@ -268,8 +318,8 @@ impl App {
                         self.create_screen = Some(CreateCard::default()); // WARN: skippin a frame here for no reason
                     }
                 }
-                CurrentScreen::Welcome => self.current_screen = CurrentScreen::Main,
-                _ => self.current_screen = CurrentScreen::Main,
+                CurrentScreen::WELCOME => self.current_screen = CurrentScreen::DECKS,
+                _ => self.current_screen = CurrentScreen::DECKS,
             }
         }
         Ok(())
@@ -278,11 +328,12 @@ impl App {
     pub async fn run(mut self, mut term: Tui) -> eyre::Result<()> {
         // Event handler
         let mut events = event_handler::EventHandler::default();
-        match self.fetch_deck("default").await {
+
+        match self.fetch_decks().await {
             Ok(_) => {}
             Err(e) => {
                 // TODO: HANDLE ERROR PROPERLY
-                tracing::info!("COULD NOT FETCH DECK WITH ERROR {}", e);
+                tracing::info!("COULD NOT FETCH DECKS WITH ERROR {}", e);
             }
         };
 

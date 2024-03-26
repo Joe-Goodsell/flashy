@@ -41,6 +41,7 @@ async fn main() -> io::Result<()> {
         mode: Mode::default(),
         should_quit: false,
         deck: None,
+        deckset: None,
         db_pool: pg_pool,
         pointer: ListState::default(),
         n_items: 0,
