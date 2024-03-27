@@ -2,11 +2,10 @@ use flashy::{
     configuration::{self, Settings},
     startup,
     tui::{
-        app::{App, CurrentScreen, Mode},
-        utils::*,
+        app::{App, CurrentScreen, Mode}, panes::alertpopup::AlertPopup, utils::*
     },
 };
-use ratatui::widgets::ListState;
+use ratatui::{text::Text, widgets::ListState};
 use sqlx::PgPool;
 use std::io;
 
@@ -35,6 +34,10 @@ async fn main() -> io::Result<()> {
 
     // INITIALISE APP & TERMINAL
     let term = init().expect("Failed to intialise terminal");
+
+    // TESTING: alert popup
+    let alert = AlertPopup::new(std::time::Duration::new(5, 0), Text::from("Test alert".to_string()));
+
     let app = App {
         current_screen: CurrentScreen::default(),
         create_screen: None,
@@ -46,6 +49,7 @@ async fn main() -> io::Result<()> {
         db_pool: pg_pool,
         pointer: ListState::default(),
         n_items: 0,
+        alert: Some(alert),
     };
 
     // RUN

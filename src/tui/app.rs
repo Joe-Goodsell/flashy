@@ -1,7 +1,8 @@
 use super::event_handler::{self, Event};
+use super::panes::alertpopup::AlertPopup;
 use super::screens::create_card::{CreateCard, CurrentlyEditing};
 use super::screens::create_deck::{self, CreateDeck};
-use super::screens::statusbar::StatusBar;
+use crate::tui::panes::statusbar::StatusBar;
 use super::utils::Tui;
 use crate::domain::deck::Deck;
 use crate::domain::deckset::DeckSet;
@@ -63,13 +64,14 @@ impl Display for Mode {
 
 // Stores application state
 #[derive(Debug)]
-pub struct App {
+pub struct App<'a> {
     pub current_screen: CurrentScreen,
     
 
     // TODO: look up ratatui docs to see if this is right approach
     pub create_screen: Option<CreateCard>,
     pub create_deck: Option<CreateDeck>,
+    pub alert: Option<AlertPopup<'a>>, // always appears in top-right (floating)
 
     pub mode: Mode,
     pub should_quit: bool,
@@ -82,8 +84,8 @@ pub struct App {
     pub n_items: usize, // number of items, e.g. list items, currently displayed
 }
 
-impl Widget for &mut App {
-    fn render(mut self, area: Rect, buf: &mut Buffer) {
+impl<'a> Widget for &mut App<'a> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)])
@@ -102,7 +104,7 @@ impl Widget for &mut App {
         match &self.current_screen {
             CurrentScreen::CARDS => {
                 let title = Title::from(format!(" CARDS IN {}", self.deck.as_ref().unwrap().name.clone()).bold());
-                let instructions = Title::from(Line::from(vec!["Do something".into()]));
+                let instructions = Title::from(Line::from(vec!["    [ n ] to create new card    ".into()]));
 
                 let block = Block::default()
                     .title(title.alignment(Alignment::Center))
@@ -222,12 +224,20 @@ impl Widget for &mut App {
                     .centered()
                     .render(main_area, buf);
             }
-            _ => {}
         }
+
+        // Renders top-right 'alert' popup, and sets to None when times out
+        if let Some(alert) = &self.alert {
+            alert.render(main_area, buf);
+            if !alert.is_valid() {
+                self.alert = None;
+            }
+        };
     }
+
 }
 
-impl App {
+impl<'a> App<'a> {
     // TODO: make names clearer
     /// Fetches a `DeckSet` containing all saved decks (without loading cards)
     async fn fetch_decks(&mut self) -> Result<(), sqlx::Error> {
@@ -263,7 +273,6 @@ impl App {
                 // Main screen lists cards
                 CurrentScreen::DECKS => match &key.code {
                     Char('q') => self.should_quit = true,
-                    Char('e') => self.current_screen = CurrentScreen::CreateCard,
                     Char('j') => {
                         // how to set back to None?
                         if self.n_items != 0 {
@@ -305,7 +314,37 @@ impl App {
                     }
                     _ => {}
                 },
-                
+
+                // DISPLAY CARDS
+                    CurrentScreen::CARDS => match &key.code {
+                    Char('q') => self.should_quit = true,
+                    Char('j') => {
+                        // how to set back to None?
+                        if self.n_items != 0 {
+                            let selected = match self.pointer.selected() {
+                                Some(val) => {
+                                    if val < self.n_items - 1 {
+                                        val + 1
+                                    } else {
+                                        val
+                                    }
+                                },
+                                None => 0usize,
+                            };
+                            self.pointer.select(Some(selected));
+                        }
+                    },
+                    Char('k') => {
+                        if let Some(val) = self.pointer.selected() {
+                            self.pointer.select(Some(val.saturating_sub(1)));
+                        }
+                    },
+                    Char('n') => {
+                        // Create new deck
+                        self.current_screen = CurrentScreen::CreateCard;
+                    },
+                    _ => {}
+                },
                 // CREATE NEW DECK
                 CurrentScreen::CreateDeck => {
                     if let Some(create_deck) = &mut self.create_deck {
@@ -339,7 +378,7 @@ impl App {
                         }
                     }
                 },
-
+                
                 // Create screen allows creation of new flashcard
                 CurrentScreen::CreateCard => {
                     if let Some(create_card) = &mut self.create_screen {
@@ -351,21 +390,22 @@ impl App {
                                     create_card.toggle_field();
                                 }
                                 KeyCode::Enter => {
-                                    match &self.deck {
-                                        Some(deck) => {
-                                            match create_card.try_save(&self.db_pool, deck.id).await
-                                            {
-                                                Ok(_) => {
-                                                    self.current_screen = CurrentScreen::CARDS;
-                                                    self.create_screen = None;
-                                                }
-                                                Err(e) => {
-                                                    // TODO: implement error popup
-                                                    tracing::error!("Error saving card: {}", e);
-                                                }
+                                    if let Some(deck) = &mut self.deck {
+                                        match create_card.try_save(&self.db_pool, deck.id).await
+                                        {
+                                            Ok(_) => {
+                                                self.current_screen = CurrentScreen::CARDS;
+                                                self.create_screen = None;
+                                                match deck.load_cards(&self.db_pool).await {
+                                                    Ok(_) => tracing::info!("Deck reloaded"),
+                                                    Err(e) => tracing::error!("Failed to reload deck! {}", e),
+                                                };
+                                            }
+                                            Err(e) => {
+                                                // TODO: implement error popup
+                                                tracing::error!("Error saving card: {}", e);
                                             }
                                         }
-                                        _ => (),
                                     };
                                 }
                                 KeyCode::Esc => self.current_screen = CurrentScreen::CARDS,
