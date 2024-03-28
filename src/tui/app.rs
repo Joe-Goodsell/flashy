@@ -153,10 +153,28 @@ impl<'a> Widget for &mut App<'a> {
                                     .map(|card| card.front_text.clone().unwrap())
                                     .collect()
                             },
-                            None => vec!["NO CARDS IN DECK".to_string()],
+                            None => {
+                                self.alert = Some(
+                                    AlertPopup::new(
+                                        std::time::Duration::new(5,0),
+                                        "No cards in deck".to_string(),
+                                        AlertPriority::Yellow,
+                                    )
+                                );
+                                Vec::new()
+                            },
                         }
                     },
-                    None => vec!["NO DECK FOUND".to_string()],
+                    None => {
+                        self.alert = Some(
+                            AlertPopup::new(
+                                std::time::Duration::new(5,0),
+                                "Error: Failed to retrieve cards. Could not find deck".to_string(),
+                                AlertPriority::Red,
+                            )
+                        );
+                        Vec::new()
+                    }
                 };
 
                 self.n_items = cards.len();
@@ -188,7 +206,13 @@ impl<'a> Widget for &mut App<'a> {
                     Some(d) => {
                         d.decks.iter().map(|deck| deck.name.clone()).collect()
                     }, 
-                    None => vec!["NO DECKS FOUND".to_string()],
+                    None => {
+                        self.alert = Some(AlertPopup::new(
+                            std::time::Duration::new(5,0), 
+                            "No decks found".to_string(), 
+                            AlertPriority::Yellow));
+                        Vec::new()
+                    },
                 };
 
                 self.n_items = decklist.len();
@@ -242,6 +266,13 @@ impl<'a> App<'a> {
             Ok(deckset) => self.deckset = Some(deckset),
             Err(e) => return Err(e),
         }
+        self.alert = Some(
+            AlertPopup::new(
+                std::time::Duration::new(5,0),
+                "Decks loaded successfully".to_string(),
+                AlertPriority::Green,
+            )
+        );
         Ok(())
     }
 

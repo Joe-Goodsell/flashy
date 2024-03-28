@@ -1,4 +1,4 @@
-use ratatui::{layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::Text, widgets::{Block, Borders, Paragraph, Widget, Wrap}};
+use ratatui::{layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::Text, widgets::{Block, Borders, Padding, Paragraph, Widget, Wrap}};
 use std::time;
 
 #[derive(Debug)]
@@ -22,15 +22,16 @@ impl<'a> AlertPopup<'a> {
         let style: Style = match &priority {
             AlertPriority::Green => Style::default()
                 .fg(Color::Green)
-                .bg(Color::Black)
+                .bg(Color::DarkGray)
                 .add_modifier(Modifier::ITALIC),
             AlertPriority::Yellow => Style::default()
-                .fg(Color::Green)
-                .bg(Color::Black)
+                .fg(Color::Yellow)
+                .bg(Color::DarkGray)
                 .add_modifier(Modifier::ITALIC),
             AlertPriority::Red => Style::default()
                 .fg(Color::Red)
-                .bg(Color::Black),
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::ITALIC),
         };
         Self {
             duration,
@@ -63,6 +64,7 @@ impl<'a> Widget for &AlertPopup<'a> {
             Paragraph::new(self.text.clone())
                 .style(self.text.style)
                 .block(Block::default().borders(Borders::ALL))
+                // .block(Block::default().borders(Borders::ALL).padding(Padding::uniform(2)))
                 .wrap(Wrap { trim: true })
                 .render(top_right, buf);
     }
