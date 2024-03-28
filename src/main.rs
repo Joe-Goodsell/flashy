@@ -2,7 +2,9 @@ use flashy::{
     configuration::{self, Settings},
     startup,
     tui::{
-        app::{App, CurrentScreen, Mode}, panes::alertpopup::{AlertPopup, AlertPriority}, utils::*
+        app::{App, CurrentScreen, Mode},
+        panes::alertpopup::{AlertPopup, AlertPriority},
+        utils::*,
     },
 };
 use ratatui::{text::Text, widgets::ListState};
@@ -36,7 +38,11 @@ async fn main() -> io::Result<()> {
     let term = init().expect("Failed to intialise terminal");
 
     // TESTING: alert popup
-    let alert = AlertPopup::new(std::time::Duration::new(5, 0), "test alert".to_string(), AlertPriority::Green);
+    let alert = AlertPopup::new(
+        std::time::Duration::new(5, 0),
+        "test alert".to_string(),
+        AlertPriority::Green,
+    );
 
     let app = App {
         current_screen: CurrentScreen::default(),

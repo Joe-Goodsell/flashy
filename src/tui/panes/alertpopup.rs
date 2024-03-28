@@ -55,8 +55,8 @@ impl<'a> Widget for &AlertPopup<'a> {
             let mut top_right = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints(vec![
-                    Constraint::Percentage(33),
-                    Constraint::Min(10),
+                    Constraint::Percentage(100),
+                    Constraint::Min(self.text.width() as u16 + 4),
                 ])
                 .split(area)[1];
             top_right.height = 4;

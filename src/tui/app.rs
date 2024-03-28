@@ -1,5 +1,5 @@
 use super::event_handler::{self, Event};
-use super::panes::alertpopup::AlertPopup;
+use super::panes::alertpopup::{AlertPopup, AlertPriority};
 use super::screens::create_card::{CreateCard, CurrentlyEditing};
 use super::screens::create_deck::{self, CreateDeck};
 use crate::tui::panes::statusbar::StatusBar;
@@ -102,9 +102,37 @@ impl<'a> Widget for &mut App<'a> {
         StatusBar::new(self.mode.clone()).render(statusbar_area, buf);
 
         match &self.current_screen {
+            CurrentScreen::WELCOME => {
+                let splash: String = r#"
+     _________  __        _______    _________   _      _   _     _
+    / ______ / / /       / _____  / / ________/ / /    / / / /   / /
+   / /_____   / /       / /    / / / /_______  / /____/ / / /___/ /
+  / ______/  / /       / /    / / /______   / / _____  / /_____  /
+ / /        / /_____  / /    / / _______/  / / /    / / ______/ /
+/_/        /_______/ /_/    /_/ /_________/ /_/    /_/ /_______/
+                "#.to_string();
+
+                let instructions =
+                    Title::from(Line::from(vec!["[ Press any key to get started ]" .into()]));
+                let block = Block::default()
+                    .title(
+                        instructions
+                            .alignment(Alignment::Center)
+                            .position(Position::Bottom),
+                    )
+                    .borders(Borders::ALL)
+                    .border_set(border::THICK)
+                    .padding(Padding::new(0, 0, 4, 0));
+
+                Paragraph::new(splash)
+                    .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+                    .block(block)
+                    .centered()
+                    .render(main_area, buf);
+        }
             CurrentScreen::CARDS => {
                 let title = Title::from(format!(" CARDS IN {}", self.deck.as_ref().unwrap().name.clone()).bold());
-                let instructions = Title::from(Line::from(vec!["    [ n ] to create new card    ".into()]));
+                let instructions = Title::from(Line::from(vec!["[ [n] to create new card ]".into()]));
 
                 let block = Block::default()
                     .title(title.alignment(Alignment::Center))
@@ -139,7 +167,7 @@ impl<'a> Widget for &mut App<'a> {
                     .highlight_symbol(">>")
                     .repeat_highlight_symbol(true);
 
-                ratatui::widgets::StatefulWidget::render(list, area, buf, &mut self.pointer);
+                ratatui::widgets::StatefulWidget::render(list, main_area, buf, &mut self.pointer);
             }
             CurrentScreen::DECKS => {
                 let title = Title::from("DECKS".to_string());
@@ -171,7 +199,7 @@ impl<'a> Widget for &mut App<'a> {
                     .highlight_symbol(">>")
                     .repeat_highlight_symbol(true);
 
-                ratatui::widgets::StatefulWidget::render(list, area, buf, &mut self.pointer);
+                ratatui::widgets::StatefulWidget::render(list, main_area, buf, &mut self.pointer);
             }
 
 
@@ -192,37 +220,6 @@ impl<'a> Widget for &mut App<'a> {
                 if let Some(create_screen) = &self.create_screen {
                     create_screen.render(main_area, buf, &mut state);
                 };
-            }
-            CurrentScreen::WELCOME => {
-                let title = Title::from(" Flashy ".bold());
-                let instructions =
-                    Title::from(Line::from(vec!["Press any key to get started".into()]));
-                let block = Block::default()
-                    .title(title.alignment(Alignment::Center))
-                    .title(
-                        instructions
-                            .alignment(Alignment::Center)
-                            .position(Position::Bottom),
-                    )
-                    .borders(Borders::ALL)
-                    .border_set(border::THICK)
-                    .padding(Padding::new(0, 0, 4, 0));
-
-                let body_text = Text::from(vec![Line::from(vec![Span::styled(
-                    "WELCOME TO FLASHY!",
-                    Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Green)
-                        .add_modifier(Modifier::BOLD)
-                        .add_modifier(Modifier::ITALIC)
-                        .add_modifier(Modifier::RAPID_BLINK),
-                )])])
-                .alignment(Alignment::Center);
-
-                Paragraph::new(body_text)
-                    .block(block)
-                    .centered()
-                    .render(main_area, buf);
             }
         }
 
@@ -357,15 +354,17 @@ impl<'a> App<'a> {
                                             self.current_screen = CurrentScreen::DECKS;
                                             self.create_deck = None;
                                             self.fetch_decks().await.unwrap();
+                                            self.alert = Some(AlertPopup::new(std::time::Duration::new(5, 0), "Saved deck".to_string(), AlertPriority::Green));
                                         }
                                         Err(e) => {
-                                            // TODO: implement error popup
+                                            self.alert = Some(AlertPopup::new(std::time::Duration::new(5, 0), "Failed to save deck!".to_string(), AlertPriority::Red));
                                             tracing::error!("Error saving deck: {}", e);
                                         }
                                     }
                                 },
                                 Char('i') => self.mode = Mode::INSERT,
                                 Char('q') => self.should_quit = true,
+                                Char('d') => todo!(), // TODO: impl delete deck
                                 KeyCode::Esc => self.current_screen = CurrentScreen::DECKS,
                                 _ => {},
                             }
