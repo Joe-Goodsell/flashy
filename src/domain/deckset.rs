@@ -37,7 +37,7 @@ impl DeckSet {
         .fetch_all(db)
         .await?;
 
-        let decks: Vec<Deck> = raw.iter().map(|d| Deck::from(d)).collect();
+        let decks: Vec<Deck> = raw.iter().map(Deck::from).collect();
 
         Ok(
             DeckSet {

@@ -11,6 +11,19 @@ pub struct Card {
     pub modified: Option<DateTime<Utc>>,
 }
 
+impl Default for Card {
+    fn default() -> Self {
+        Self { 
+            id: Uuid::new_v4(), 
+            front_text: None, 
+            back_text: None, 
+            deck_id: None, 
+            created: None, 
+            modified: None
+        } 
+    }
+}
+
 impl Card {
     pub fn new() -> Self {
         Card {

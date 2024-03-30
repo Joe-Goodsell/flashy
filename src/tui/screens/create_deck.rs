@@ -1,9 +1,9 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     style::{Color, Style},
     text::{Span, Text},
-    widgets::{Block, Borders, Padding, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 
 use sqlx::PgPool;

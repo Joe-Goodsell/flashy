@@ -82,7 +82,7 @@ impl Deck {
             cards: None,
         };
 
-        deck.load_cards(db);
+        deck.load_cards(db).await.expect("failed to load cards for deck");
         Ok(deck)
     }
 

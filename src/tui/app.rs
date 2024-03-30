@@ -1,7 +1,7 @@
 use super::event_handler::{self, Event};
 use super::panes::alertpopup::{AlertPopup, AlertPriority};
 use super::screens::create_card::{CreateCard, CurrentlyEditing};
-use super::screens::create_deck::{self, CreateDeck};
+use super::screens::create_deck::CreateDeck;
 use super::utils::Tui;
 use crate::domain::card::Card;
 use crate::domain::deck::Deck;
@@ -12,21 +12,20 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyCode::Char;
 use ratatui::layout::{Constraint, Direction, Layout};
 use std::fmt::Display;
-use uuid::Uuid;
 
-use ratatui::widgets::{List, ListDirection, ListState, StatefulWidget};
+
+use ratatui::widgets::{List, ListState, StatefulWidget};
 // UI
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style, Stylize},
     symbols::border,
-    text::{Line, Span, Text},
+    text::Line,
     widgets::{
         block::{Position, Title},
         Block, Borders, Padding, Paragraph, Widget,
     },
-    Frame,
 };
 
 // BACKEND
@@ -169,17 +168,28 @@ impl<'a> Widget for &mut App<'a> {
                     None => Vec::new(),
                 };
 
-                if cards.is_empty() {
+                let nums_col_width = 4usize;
+                let nums: Vec<String> = (1..cards.len() + 1).map(|val| val.to_string()).collect();
+                let nums: Vec<String> = nums
+                    .iter()
+                    .map(|s| format!("{}{}", s, " ".repeat(nums_col_width - s.len())))
+                    .collect();
+                let list_text: Vec<String> = nums
+                    .iter()
+                    .zip(cards.iter())
+                    .map(|(a,b)| format!("{} {}", a, b))
+                    .collect();
+
+                if list_text.is_empty() {
                     self.alert = Some(AlertPopup::new(
                         std::time::Duration::new(5, 0),
                         "Warn: No cards in deck.".to_string(),
                         AlertPriority::Yellow,
                     ));
                 }
+                self.n_items = list_text.len();
 
-                self.n_items = cards.len();
-
-                let list = List::new(cards)
+                let list = List::new(list_text)
                     .block(block)
                     .highlight_symbol(">> ")
                     .repeat_highlight_symbol(true);
@@ -215,9 +225,21 @@ impl<'a> Widget for &mut App<'a> {
                     }
                 };
 
+                // TODO: factor out
+                let nums_col_width = 4usize;
+                let nums: Vec<String> = (1..decklist.len() + 1).map(|val| val.to_string()).collect();
+                let nums: Vec<String> = nums
+                    .iter()
+                    .map(|s| format!("{}{}", s, " ".repeat(nums_col_width - s.len())))
+                    .collect();
+                let list_text: Vec<String> = nums
+                    .iter()
+                    .zip(decklist.iter())
+                    .map(|(a,b)| format!("{} {}", a, b))
+                    .collect();
                 self.n_items = decklist.len();
 
-                let list = List::new(decklist)
+                let list = List::new(list_text)
                     .block(block)
                     // .highlight_style(Style::new().add_modifier(Modifier::REVERSED))
                     .highlight_symbol(">>")
@@ -273,6 +295,7 @@ impl<'a> App<'a> {
 
     /// Loads deck from name, if it doesn't exist, creates a new one named "default"
     /// And saves to DB.
+    
     async fn fetch_deck(&mut self, name: &str) -> Result<(), sqlx::Error> {
         match Deck::new_from_db(name, &self.db_pool).await {
             Ok(deck) => self.deck = Some(deck),
@@ -343,6 +366,8 @@ impl<'a> App<'a> {
                                         }
                                     };
                                     self.deck = Some(deck);
+                                    // Set ListState to default
+                                    self.pointer = ListState::default(); 
                                     self.current_screen = CurrentScreen::CARDS;
                                 };
                             }
@@ -388,6 +413,7 @@ impl<'a> App<'a> {
                             // TODO: review this .clone()
                             if let Some(card) = deck.cards.clone().unwrap_or(Vec::<Card>::new()).get(self.pointer.selected().unwrap_or(0usize)) {
                                 self.current_screen = CurrentScreen::CreateCard;
+                                self.pointer = ListState::default();
                                 self.create_screen = Some(CreateCard::from(card));
                             } else {
                                 self.alert = Some(

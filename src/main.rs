@@ -7,7 +7,7 @@ use flashy::{
         utils::*,
     },
 };
-use ratatui::{text::Text, widgets::ListState};
+use ratatui::widgets::ListState;
 use sqlx::PgPool;
 use std::io;
 

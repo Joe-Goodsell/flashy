@@ -1,8 +1,7 @@
 
 // TODO: test that card saves and can be retrieved
 
-use flashy::domain::new_card::NewCard;
-use uuid::Uuid;
+
 
 // #[tokio::test]
 // async fn test_card_saves_correctly() {

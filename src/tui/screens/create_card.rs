@@ -84,16 +84,16 @@ impl StatefulWidget for &CreateCard {
 
         let (front_text, back_text) = match self.state {
             CurrentlyEditing::FrontText => (
-                Span::styled(self.card.front_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_EDITING),
-                Span::styled(self.card.back_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.card.front_text.clone().unwrap_or_default(), TEXTBOX_STYLE_EDITING),
+                Span::styled(self.card.back_text.clone().unwrap_or_default(), TEXTBOX_STYLE_VIEWING),
             ),
             CurrentlyEditing::BackText => (
-                Span::styled(self.card.front_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_VIEWING),
-                Span::styled(self.card.back_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_EDITING),
+                Span::styled(self.card.front_text.clone().unwrap_or_default(), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.card.back_text.clone().unwrap_or_default(), TEXTBOX_STYLE_EDITING),
             ),
             CurrentlyEditing::Saving => (
-                Span::styled(self.card.front_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_VIEWING),
-                Span::styled(self.card.back_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.card.front_text.clone().unwrap_or_default(), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.card.back_text.clone().unwrap_or_default(), TEXTBOX_STYLE_VIEWING),
             ),
         };
 
