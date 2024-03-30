@@ -9,17 +9,16 @@ use ratatui::{
 use sqlx::PgPool;
 
 use crate::{
-    domain::new_card::NewCard,
+    domain::card::Card,
     tui::{app::Mode, utils::create_centred_rect},
 };
 
-const TEXTBOX_STYLE_EDITING: Style = Style::new().bg(Color::Yellow);
-const TEXTBOX_STYLE_VIEWING: Style = Style::new().bg(Color::LightBlue);
+const TEXTBOX_STYLE_EDITING: Style = Style::new().fg(Color::Yellow);
+const TEXTBOX_STYLE_VIEWING: Style = Style::new().fg(Color::LightBlue);
 
 #[derive(Debug, Clone)]
 pub struct CreateCard {
-    pub front_field: String,
-    pub back_field: String,
+    pub card: Card,
     pub mode: Mode,
     pub state: CurrentlyEditing,
 }
@@ -32,12 +31,24 @@ pub enum CurrentlyEditing {
     Saving,
 }
 
+
+
 /// TODO: TESTING PURPOSES
 impl Default for CreateCard {
     fn default() -> Self {
         CreateCard {
-            front_field: "FRONT".to_string(),
-            back_field: "BACK".to_string(),
+            card: Card::new(),
+            mode: Mode::default(),
+            state: CurrentlyEditing::default(),
+        }
+    }
+}
+
+impl From<&Card> for CreateCard {
+    fn from(card: &Card) -> Self {
+        // WARN: this doesn't account for "reloading" the card stored in the `App`
+        Self {
+            card: card.clone(),
             mode: Mode::default(),
             state: CurrentlyEditing::default(),
         }
@@ -57,10 +68,10 @@ impl StatefulWidget for &CreateCard {
                 Style::default().fg(Color::Yellow).bg(Color::Black),
             ))
             .borders(Borders::ALL)
-            .style(Style::default().bg(Color::DarkGray));
+            .style(Style::default().bg(Color::Black));
 
         let text_fields = Layout::default()
-            .direction(Direction::Horizontal)
+            .direction(Direction::Vertical)
             .constraints(vec![
                 Constraint::Percentage(50u16),
                 Constraint::Percentage(50u16),
@@ -73,16 +84,16 @@ impl StatefulWidget for &CreateCard {
 
         let (front_text, back_text) = match self.state {
             CurrentlyEditing::FrontText => (
-                Span::styled(self.front_field.clone(), TEXTBOX_STYLE_EDITING),
-                Span::styled(self.back_field.clone(), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.card.front_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_EDITING),
+                Span::styled(self.card.back_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_VIEWING),
             ),
             CurrentlyEditing::BackText => (
-                Span::styled(self.front_field.clone(), TEXTBOX_STYLE_VIEWING),
-                Span::styled(self.back_field.clone(), TEXTBOX_STYLE_EDITING),
+                Span::styled(self.card.front_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.card.back_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_EDITING),
             ),
             CurrentlyEditing::Saving => (
-                Span::styled(self.front_field.clone(), TEXTBOX_STYLE_VIEWING),
-                Span::styled(self.back_field.clone(), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.card.front_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_VIEWING),
+                Span::styled(self.card.back_text.clone().unwrap_or(String::new()), TEXTBOX_STYLE_VIEWING),
             ),
         };
 
@@ -90,11 +101,11 @@ impl StatefulWidget for &CreateCard {
         Paragraph::default().block(block).render(popup_area, buf);
         //FRONT_TEXT
         Paragraph::new(front_text)
-            .block(text_field_block.clone())
+            .block(text_field_block.clone().title("Front".to_string()))
             .render(text_fields[0], buf);
         //BACK_FRONT
         Paragraph::new(back_text)
-            .block(text_field_block)
+            .block(text_field_block.title("Back".to_string()))
             .render(text_fields[1], buf);
     }
 }
@@ -102,10 +113,9 @@ impl StatefulWidget for &CreateCard {
 impl CreateCard {
     //TODO: implement saving to db
 
-    pub async fn try_save(&self, db_pool: &PgPool, deck_id: uuid::Uuid) -> Result<(), sqlx::Error> {
-        let card = NewCard::try_from(&self, deck_id).unwrap();
-        tracing::info!("SAVING: {:?}", card);
-        card.save(db_pool).await
+    pub async fn try_save(&self, db_pool: &PgPool) -> Result<(), sqlx::Error> {
+        tracing::info!("SAVING: {:?}", self.card);
+        self.card.save(db_pool).await
     }
 
     pub fn toggle_field(&mut self) {
@@ -119,8 +129,17 @@ impl CreateCard {
     pub fn push_char(&mut self, ch: char) {
         tracing::info!("{}", format!("pushing '{}' to {:?}", ch, self.state));
         match self.state {
-            CurrentlyEditing::FrontText => self.front_field.push(ch),
-            CurrentlyEditing::BackText => self.back_field.push(ch),
+            CurrentlyEditing::FrontText => {
+                // TODO: is this best way?
+                let mut text = self.card.front_text.clone().unwrap_or("".to_string());
+                text.push(ch);
+                self.card.set_front_text(text);
+            },
+            CurrentlyEditing::BackText => {
+                let mut text = self.card.back_text.clone().unwrap_or("".to_string());
+                text.push(ch);
+                self.card.set_back_text(text);
+            }
             CurrentlyEditing::Saving => {}
         }
     }
@@ -128,9 +147,17 @@ impl CreateCard {
     pub fn pop_char(&mut self) {
         //TODO: rewrite to store current cursor location
         match self.state {
-            CurrentlyEditing::FrontText => _ = self.front_field.pop(),
-            CurrentlyEditing::BackText => _ = self.back_field.pop(),
-            _ => {}
+            CurrentlyEditing::FrontText => {
+                let mut text = self.card.front_text.clone().unwrap_or("".to_string());
+                text.pop();
+                self.card.set_front_text(text);
+            },
+            CurrentlyEditing::BackText => {
+                let mut text = self.card.back_text.clone().unwrap_or("".to_string());
+                text.pop();
+                self.card.set_back_text(text);
+            }
+            CurrentlyEditing::Saving => {}
         }
     }
 }

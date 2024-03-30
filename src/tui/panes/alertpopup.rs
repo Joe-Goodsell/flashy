@@ -1,4 +1,4 @@
-use ratatui::{layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::Text, widgets::{Block, Borders, Padding, Paragraph, Widget, Wrap}};
+use ratatui::{layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style}, text::Text, widgets::{Block, Borders, Paragraph, Widget, Wrap}};
 use std::time;
 
 #[derive(Debug)]
@@ -7,7 +7,6 @@ pub enum AlertPriority {
     Yellow,
     Red,
 }
-
 
 #[derive(Debug)]
 pub struct AlertPopup<'a> {

@@ -9,7 +9,7 @@ use ratatui::{
 use sqlx::PgPool;
 
 use crate::{
-    domain::{deck::Deck, new_card::NewCard},
+    domain::deck::Deck,
     tui::{app::Mode, utils::create_centred_rect},
 };
 

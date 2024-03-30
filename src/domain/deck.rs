@@ -2,13 +2,13 @@ use sqlx::{types::chrono::Utc, PgPool};
 use uuid::Uuid;
 use super::deckset::RawDeck;
 
-use super::card::RawCard;
+use super::card::Card;
 
 #[derive(Debug, Clone)]
 pub struct Deck {
     pub id: Uuid,
     pub name: String,
-    pub cards: Option<Vec<RawCard>>,
+    pub cards: Option<Vec<Card>>,
 }
 
 impl From<&RawDeck> for Deck {
@@ -47,8 +47,8 @@ impl Deck {
     }
 
     pub async fn load_cards(&mut self, db: &PgPool) -> Result<(), sqlx::Error> {
-        let cards: Vec<RawCard> = sqlx::query_as!(
-            RawCard,
+        let cards: Vec<Card> = sqlx::query_as!(
+            Card,
             r#"
             SELECT * FROM cards
             WHERE deck_id = $1
@@ -118,7 +118,7 @@ impl Deck {
     //     self.cards.iter()
     // }
 
-    pub fn add(&mut self, card: RawCard) -> Result<(), std::io::Error> {
+    pub fn add(&mut self, card: Card) -> Result<(), std::io::Error> {
         match &mut self.cards {
             Some(c) => {
                 c.push(card);
