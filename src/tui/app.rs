@@ -34,6 +34,7 @@ pub enum CurrentScreen {
     CARDS,
     CreateCard,
     CreateDeck,
+    REVIEW,
     #[default]
     WELCOME,
 }
@@ -267,6 +268,7 @@ impl<'a> Widget for &mut App<'a> {
                     self.create_screen = Some(CreateCard::default());
                 }
             }
+            CurrentScreen::REVIEW => todo!(),
         }
 
         // Renders top-right 'alert' popup, and sets to None when times out
@@ -534,6 +536,9 @@ impl<'a> App<'a> {
                     // Create statusbar once we're past the splash screen
                     self.statusbar = Some(StatusBar::default());
                     self.current_screen = CurrentScreen::DECKS;
+                },
+                CurrentScreen::REVIEW => {
+                    todo!()
                 },
             }
         }
