@@ -10,30 +10,23 @@ use crate::tui::panes::statusbar::StatusBar;
 use color_eyre::eyre;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyCode::Char;
-use ratatui::layout::{Constraint, Direction, Layout};
 use std::fmt::Display;
 
-
-use ratatui::widgets::{List, ListState, StatefulWidget};
 // UI
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     symbols::border,
     text::Line,
     widgets::{
         block::{Position, Title},
-        Block, Borders, Padding, Paragraph, Widget,
+        Block, Borders, List, ListState, Padding, Paragraph, Widget, StatefulWidget
     },
 };
 
 // BACKEND
 use sqlx::PgPool;
-
-pub trait GetScreen {
-    fn get_screen() -> Paragraph<'static>; //TODO: hmmmm
-}
 
 #[derive(Debug, Default)]
 pub enum CurrentScreen {
@@ -65,22 +58,23 @@ impl Display for Mode {
 // Stores application state
 #[derive(Debug)]
 pub struct App<'a> {
-    pub current_screen: CurrentScreen,
+    current_screen: CurrentScreen,
 
-    // TODO: look up ratatui docs to see if this is right approach
-    pub create_screen: Option<CreateCard>,
-    pub create_deck: Option<CreateDeck>,
-    pub alert: Option<AlertPopup<'a>>, // always appears in top-right (floating)
+    // Persistent UI elements
+    create_screen: Option<CreateCard>,
+    create_deck: Option<CreateDeck>,
+    statusbar: Option<StatusBar>,
+    alert: Option<AlertPopup<'a>>, // always appears in top-right (floating)
 
-    pub mode: Mode,
-    pub should_quit: bool,
+    mode: Mode,
+    should_quit: bool,
 
     // I don't want to clone the Deck, but don't know how to avoid it...?
-    pub deck: Option<Deck>,
-    pub deckset: Option<DeckSet>,
-    pub db_pool: PgPool, // TODO: should be optional?
-    pub pointer: ListState,
-    pub n_items: usize, // number of items, e.g. list items, currently displayed
+    deck: Option<Deck>,
+    deckset: Option<DeckSet>,
+    db_pool: PgPool, // TODO: should be optional?
+    pointer: ListState,
+    n_items: usize, // number of items, e.g. list items, currently displayed
 }
 
 impl<'a> Widget for &mut App<'a> {
@@ -137,7 +131,7 @@ impl<'a> Widget for &mut App<'a> {
             }
             CurrentScreen::CARDS => {
                 let title = Title::from(
-                    format!(" CARDS IN {}", self.deck.as_ref().unwrap().name.clone()).bold(),
+                    format!("[ CARDS IN {} ]", self.deck.as_ref().unwrap().name.clone()).bold(),
                 );
                 let instructions =
                     Title::from(Line::from(vec!["[ [n] to create new card ]".into()]));
@@ -278,7 +272,23 @@ impl<'a> Widget for &mut App<'a> {
 }
 
 impl<'a> App<'a> {
-    // TODO: make names clearer
+    pub fn new(db_pool: PgPool) -> Self {
+        Self {
+            current_screen: CurrentScreen::default(),
+            create_screen: None,
+            create_deck: None,
+            statusbar: None,
+            alert: None,
+            mode: Mode::default(),
+            should_quit: false,
+            deck: None,
+            deckset: None,
+            db_pool,
+            pointer: ListState::default(),
+            n_items: 0usize,
+        }
+    }
+    
     /// Fetches a `DeckSet` containing all saved decks (without loading cards)
     async fn fetch_decks(&mut self) -> Result<(), sqlx::Error> {
         match DeckSet::load_from_db(&self.db_pool).await {
@@ -290,25 +300,6 @@ impl<'a> App<'a> {
             "Decks loaded successfully".to_string(),
             AlertPriority::Green,
         ));
-        Ok(())
-    }
-
-    /// Loads deck from name, if it doesn't exist, creates a new one named "default"
-    /// And saves to DB.
-    
-    async fn fetch_deck(&mut self, name: &str) -> Result<(), sqlx::Error> {
-        match Deck::new_from_db(name, &self.db_pool).await {
-            Ok(deck) => self.deck = Some(deck),
-            Err(e) => match e {
-                sqlx::Error::RowNotFound => {
-                    tracing::info!("Deck not found, creating new one.");
-                    let new_deck = Deck::default();
-                    new_deck.save_to_db(&self.db_pool).await?;
-                    self.deck = Some(new_deck);
-                }
-                _ => return Err(e),
-            },
-        }
         Ok(())
     }
 
@@ -534,7 +525,7 @@ impl<'a> App<'a> {
         };
 
         while !self.should_quit {
-            // Check events
+            // Poll events
             let event = events.next().await?;
 
             // Update application state
@@ -543,23 +534,7 @@ impl<'a> App<'a> {
             // Render
             // Must only call `draw()` once per pass; should render whole frame
             term.draw(|f| f.render_widget(&mut self, f.size()))?;
-            // self.handle_events()?;
         }
         Ok(())
     }
-
-    // fn handle_events(&mut self) -> std::io::Result<()> {
-    //     match event::read()? {
-    //         crossterm::event::Event::Key(key_event) if key_event.kind== KeyEventKind::Press => {
-    //             self.handle_key_event(key_event)
-    //         },
-    //         _ => {},
-    //     };
-    //     //TODO:
-    //     Ok(())
-    // }
-
-    // fn handle_key_event(&mut self, key_event: KeyEvent) {
-    //     unimplemented!()
-    // }
 }
