@@ -10,7 +10,7 @@ use sqlx::PgPool;
 
 use crate::{
     domain::card::Card,
-    tui::{app::Mode, utils::create_centred_rect},
+    tui::{app::Mode, utils::create_centred_rect_by_percent},
 };
 
 const TEXTBOX_STYLE_EDITING: Style = Style::new().fg(Color::Yellow);
@@ -60,7 +60,7 @@ impl StatefulWidget for &CreateCard {
     /// Intended to render a popup window with fields `Front Text`, `Back Text`
     /// And a select menu for an existing Deck (TODO:)
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let popup_area: Rect = create_centred_rect(50u16, 50u16, area);
+        let popup_area: Rect = create_centred_rect_by_percent(50u16, 50u16, area);
 
         let block = Block::default()
             .title(Span::styled(

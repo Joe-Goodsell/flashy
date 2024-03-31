@@ -10,7 +10,7 @@ use sqlx::PgPool;
 
 use crate::{
     domain::deck::Deck,
-    tui::{app::Mode, utils::create_centred_rect},
+    tui::{app::Mode, utils::create_centred_rect_by_percent},
 };
 
 #[derive(Debug, Clone)]
@@ -31,7 +31,7 @@ impl Default for CreateDeck {
 
 impl Widget for &CreateDeck {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let popup_area: Rect = create_centred_rect(50u16, 50u16, area);
+        let popup_area: Rect = create_centred_rect_by_percent(50u16, 50u16, area);
 
         let block = Block::default()
             .title(Span::styled(

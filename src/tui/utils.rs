@@ -21,8 +21,25 @@ pub fn restore() -> std::io::Result<()> {
     Ok(())
 }
 
+pub fn create_centred_rect_by_size(size_x: u16, size_y: u16, area: Rect) -> Rect {
+    let centre_rect = Layout::default().direction(Direction::Vertical)
+        .constraints(vec![
+            Constraint::Percentage(100),
+            Constraint::Min(size_y),
+            Constraint::Percentage(100),
+        ])
+        .split(area)[1];
 
-pub fn create_centred_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    Layout::default().direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Percentage(100),
+                Constraint::Min(size_x),
+                Constraint::Percentage(100),
+            ])
+            .split(centre_rect)[1]
+}
+
+pub fn create_centred_rect_by_percent(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     // First split vertical (i.e. splits stack on top of each other)
     // Popup will fill `percent_y` proportion of screen
     let centre_rect = Layout::default().direction(Direction::Vertical)

@@ -1,5 +1,6 @@
 use super::event_handler::{self, Event};
 use super::panes::alertpopup::{AlertPopup, AlertPriority};
+use super::panes::confirm::ConfirmPopup;
 use super::screens::create_card::{CreateCard, CurrentlyEditing};
 use super::screens::create_deck::CreateDeck;
 use super::utils::Tui;
@@ -34,6 +35,7 @@ pub enum CurrentScreen {
     CARDS,
     CreateCard,
     CreateDeck,
+    CONFIRM,
     REVIEW,
     #[default]
     WELCOME,
@@ -65,6 +67,7 @@ pub struct App<'a> {
     create_screen: Option<CreateCard>,
     create_deck: Option<CreateDeck>,
     statusbar: Option<StatusBar>,
+    confirm: Option<ConfirmPopup>,
     alert: Option<AlertPopup<'a>>, // always appears in top-right (floating)
 
     mode: Mode,
@@ -269,6 +272,12 @@ impl<'a> Widget for &mut App<'a> {
                 }
             }
             CurrentScreen::REVIEW => todo!(),
+            CurrentScreen::CONFIRM => {
+                tracing::info!("rendering confirm popup...");
+                if let Some(confirm_popup) = &self.confirm {
+                    confirm_popup.render(main_area, buf);
+                };
+            },
         }
 
         // Renders top-right 'alert' popup, and sets to None when times out
@@ -296,6 +305,7 @@ impl<'a> App<'a> {
             db_pool,
             pointer: ListState::default(),
             n_items: 0usize,
+            confirm: None,
         }
     }
     
@@ -412,10 +422,21 @@ impl<'a> App<'a> {
                         );
                         self.current_screen = CurrentScreen::CreateCard;
                     }
+                    Char('d') => {
+                        self.confirm = Some(ConfirmPopup {
+                            text: "Are you sure you want to delete?".to_string(),
+                            from: CurrentScreen::CreateDeck,
+                            to: CurrentScreen::CreateDeck,
+                        });
+                        self.current_screen = CurrentScreen::CONFIRM;
+                    }, // TODO: impl delete deck
                     KeyCode::Enter => {
                         if let Some(deck) = &self.deck {
                             // TODO: review this .clone()
-                            if let Some(card) = deck.cards.clone().unwrap_or(Vec::<Card>::new()).get(self.pointer.selected().unwrap_or(0usize)) {
+                            if let Some(card) = deck.cards
+                                .clone()
+                                .unwrap_or(Vec::<Card>::new())
+                                .get(self.pointer.selected().unwrap_or(0usize)) {
                                 self.current_screen = CurrentScreen::CreateCard;
                                 self.pointer = ListState::default();
                                 self.create_screen = Some(CreateCard::from(card));
@@ -423,7 +444,7 @@ impl<'a> App<'a> {
                                 self.alert = Some(
                                     AlertPopup::new(
                                         std::time::Duration::new(5, 0),
-                                        "Warn: No card selected".to_string(), 
+                                        "Warning: No card selected".to_string(), 
                                         AlertPriority::Yellow
                                     )
                                 );
@@ -459,7 +480,6 @@ impl<'a> App<'a> {
                                 },
                                 Char('i') => self.mode = Mode::INSERT,
                                 Char('q') => self.should_quit = true,
-                                Char('d') => todo!(), // TODO: impl delete deck
                                 KeyCode::Esc => self.current_screen = CurrentScreen::DECKS,
                                 _ => {}
                             },
@@ -539,6 +559,17 @@ impl<'a> App<'a> {
                 },
                 CurrentScreen::REVIEW => {
                     todo!()
+                },
+                CurrentScreen::CONFIRM => {
+                    match &key.code {
+                        KeyCode::Char('y') => {
+
+                        },
+                        KeyCode::Char('n') | KeyCode::Esc => {
+                            
+                        },
+                        _ => {},
+                    }
                 },
             }
         }
