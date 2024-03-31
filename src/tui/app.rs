@@ -79,19 +79,27 @@ pub struct App<'a> {
 
 impl<'a> Widget for &mut App<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)])
-            .margin(1)
-            .split(area);
 
-        let (main_area, statusbar_area) = (layout[0], layout[1]);
+        // Calculate area for main pane and status bar
+        // And render statusbar if it exists
+        let main_area = match &mut self.statusbar {
+            Some(statusbar) => {
+                let layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)])
+                    .margin(1)
+                    .split(area);
 
-        // seems bad
+                let (main_area, statusbar_area) = (layout[0], layout[1]);
+                statusbar.mode = self.mode.clone();
+                statusbar.render(statusbar_area, buf);
+                main_area
+            }
+            // If there's no statusbar to render, the "main area" is just "area"
+            None => area, 
+        };
+
         self.n_items = 0usize;
-
-        // Renders StatusBar
-        StatusBar::new(self.mode.clone()).render(statusbar_area, buf);
 
         match &self.current_screen {
             CurrentScreen::WELCOME => {
@@ -396,7 +404,10 @@ impl<'a> App<'a> {
                         self.current_screen = CurrentScreen::DECKS;
                     }
                     Char('n') => {
-                        // Create new deck
+                        // Create new card 
+                        self.create_screen = Some(
+                            CreateCard::from(&Card::new_with_deck(self.deck.as_ref().unwrap().id))
+                        );
                         self.current_screen = CurrentScreen::CreateCard;
                     }
                     KeyCode::Enter => {
@@ -476,6 +487,13 @@ impl<'a> App<'a> {
                                             Ok(_) => {
                                                 self.current_screen = CurrentScreen::CARDS;
                                                 self.create_screen = None;
+                                                self.alert = Some(
+                                                    AlertPopup::new(
+                                                        std::time::Duration::new(5,0),
+                                                        "Card saved".to_string(),
+                                                        AlertPriority::Green,
+                                                    )
+                                                );
                                                 match deck.load_cards(&self.db_pool).await {
                                                     Ok(_) => tracing::info!("Deck reloaded"),
                                                     Err(e) => tracing::error!(
@@ -485,8 +503,14 @@ impl<'a> App<'a> {
                                                 };
                                             }
                                             Err(e) => {
-                                                // TODO: implement error popup
-                                                tracing::error!("Error saving card: {}", e);
+                                                self.alert = Some(
+                                                    AlertPopup::new(
+                                                        std::time::Duration::new(5,0),
+                                                        "Error: Failed to save card!".to_string(),
+                                                        AlertPriority::Red,
+                                                    )
+                                                );
+                                                tracing::error!("failed to save card {}", e);
                                             }
                                         }
                                     };
@@ -506,7 +530,11 @@ impl<'a> App<'a> {
                         }
                     }
                 }
-                CurrentScreen::WELCOME => self.current_screen = CurrentScreen::DECKS,
+                CurrentScreen::WELCOME => {
+                    // Create statusbar once we're past the splash screen
+                    self.statusbar = Some(StatusBar::default());
+                    self.current_screen = CurrentScreen::DECKS;
+                },
             }
         }
         Ok(())

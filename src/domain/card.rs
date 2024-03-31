@@ -36,6 +36,18 @@ impl Card {
         }
     }
 
+    // TODO: don't like this solution
+    pub fn new_with_deck(deck_id: Uuid) -> Self {
+        Card {
+            id: Uuid::new_v4(),
+            front_text: None,
+            back_text: None,
+            deck_id: Some(deck_id),
+            created: None,
+            modified: None,
+        }
+    }
+
     pub fn set_front_text(&mut self, text: String) {
         self.front_text = Some(text);
     }
@@ -45,6 +57,12 @@ impl Card {
     }
 
     pub async fn save(&self, connection_pool: &PgPool) -> Result<(), sqlx::Error> {
+        let deck_id_print: String = match &self.deck_id {
+            Some(id) => id.to_string(),
+            None => "None".to_string(),
+        };
+        tracing::info!("saving card {} in deck {}", self.id, deck_id_print);
+
         sqlx::query!(
             r#"
             INSERT INTO cards (id, front_text, back_text, deck_id, created, modified)

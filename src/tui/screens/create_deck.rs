@@ -50,7 +50,6 @@ impl Widget for &CreateDeck {
 }
 
 impl CreateDeck {
-    //TODO: implement saving to db
 
     pub async fn try_save(&self, db_pool: &PgPool) -> Result<(), sqlx::Error> {
         let deck = Deck::new(&self.name);

@@ -10,16 +10,10 @@ use crate::tui::app::Mode;
 // TODO: Am I really instantatiating a whole new instance of a struct for *each frame*?
 #[derive(Default, Debug)]
 pub struct StatusBar {
-    mode: Mode,
+    pub mode: Mode,
 }
 
-impl StatusBar {
-    pub fn new(mode: Mode) -> Self {
-        Self { mode }
-    }
-}
-
-impl Widget for StatusBar {
+impl Widget for &StatusBar {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
