@@ -22,13 +22,14 @@ pub fn restore() -> std::io::Result<()> {
 }
 
 pub fn create_centred_rect_by_size(size_x: u16, size_y: u16, area: Rect) -> Rect {
+    // BUG: this doesn't work properly
     let centre_rect = Layout::default().direction(Direction::Vertical)
         .constraints(vec![
             Constraint::Percentage(100),
             Constraint::Min(size_y),
             Constraint::Percentage(100),
         ])
-        .split(area)[1];
+        .split(area);
 
     Layout::default().direction(Direction::Horizontal)
             .constraints(vec![
@@ -36,7 +37,7 @@ pub fn create_centred_rect_by_size(size_x: u16, size_y: u16, area: Rect) -> Rect
                 Constraint::Min(size_x),
                 Constraint::Percentage(100),
             ])
-            .split(centre_rect)[1]
+            .split(centre_rect[1])[1]
 }
 
 pub fn create_centred_rect_by_percent(percent_x: u16, percent_y: u16, area: Rect) -> Rect {

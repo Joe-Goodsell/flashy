@@ -1,6 +1,6 @@
 use super::event_handler::{self, Event};
 use super::panes::alertpopup::{AlertPopup, AlertPriority};
-use super::panes::confirm::ConfirmPopup;
+use super::panes::confirm::{ConfirmAction, ConfirmPopup};
 use super::screens::create_card::{CreateCard, CurrentlyEditing};
 use super::screens::create_deck::CreateDeck;
 use super::utils::Tui;
@@ -35,7 +35,7 @@ pub enum CurrentScreen {
     CARDS,
     CreateCard,
     CreateDeck,
-    CONFIRM,
+    CONFIRM(ConfirmPopup),
     REVIEW,
     #[default]
     WELCOME,
@@ -67,7 +67,6 @@ pub struct App<'a> {
     create_screen: Option<CreateCard>,
     create_deck: Option<CreateDeck>,
     statusbar: Option<StatusBar>,
-    confirm: Option<ConfirmPopup>,
     alert: Option<AlertPopup<'a>>, // always appears in top-right (floating)
 
     mode: Mode,
@@ -272,11 +271,8 @@ impl<'a> Widget for &mut App<'a> {
                 }
             }
             CurrentScreen::REVIEW => todo!(),
-            CurrentScreen::CONFIRM => {
-                tracing::info!("rendering confirm popup...");
-                if let Some(confirm_popup) = &self.confirm {
-                    confirm_popup.render(main_area, buf);
-                };
+            CurrentScreen::CONFIRM(popup) => {
+                popup.render(main_area, buf);
             },
         }
 
@@ -305,7 +301,6 @@ impl<'a> App<'a> {
             db_pool,
             pointer: ListState::default(),
             n_items: 0usize,
-            confirm: None,
         }
     }
     
@@ -353,6 +348,25 @@ impl<'a> App<'a> {
                     Char('n') => {
                         // Create new deck
                         self.current_screen = CurrentScreen::CreateDeck;
+                    }
+                    Char('d') => {
+                        match &self.deckset {
+                            Some(deckset) => {
+                                if let Some(curr_deck) = deckset.decks.get(self.pointer.selected().unwrap_or(0usize)) {
+                                    tracing::info!("Deleting deck: {}", curr_deck.name);
+                                    let popup = ConfirmPopup {
+                                        text: format!("Are you sure you want to delete deck '{}'?\n All of its cards will be also be deleted!", curr_deck.name),
+                                        action: ConfirmAction::DeleteDeck(curr_deck.id),
+                                    };
+                                    self.current_screen = CurrentScreen::CONFIRM(popup);
+                                } else {
+                                    self.alert = Some(AlertPopup::new(std::time::Duration::new(5,0), "No deck selected".to_string(), AlertPriority::Yellow));
+                                }
+                            }
+                            None => {
+                                self.alert = Some(AlertPopup::new(std::time::Duration::new(5,0), "No deck selected".to_string(), AlertPriority::Yellow));
+                            },
+                        }
                     }
                     KeyCode::Enter => {
                         // TODO: go to `cards` screen for current deck
@@ -423,13 +437,27 @@ impl<'a> App<'a> {
                         self.current_screen = CurrentScreen::CreateCard;
                     }
                     Char('d') => {
-                        self.confirm = Some(ConfirmPopup {
-                            text: "Are you sure you want to delete?".to_string(),
-                            from: CurrentScreen::CreateDeck,
-                            to: CurrentScreen::CreateDeck,
-                        });
-                        self.current_screen = CurrentScreen::CONFIRM;
-                    }, // TODO: impl delete deck
+                        if let Some(deck) = &self.deck {
+                            if let Some(card) = deck.cards
+                                .clone()
+                                .unwrap_or(Vec::<Card>::new())
+                                .get(self.pointer.selected().unwrap_or(0usize)) {
+                                self.current_screen = CurrentScreen::CONFIRM(ConfirmPopup {
+                                    text: "Are you sure you want to delete this card?".to_string(),
+                                    action: ConfirmAction::DeleteCard(card.id),
+                                });
+                                self.pointer = ListState::default();
+                            } else {
+                                self.alert = Some(
+                                    AlertPopup::new(
+                                        std::time::Duration::new(5, 0),
+                                        "Warning: No card selected".to_string(), 
+                                        AlertPriority::Yellow
+                                    )
+                                );
+                            }
+                        }
+                    },
                     KeyCode::Enter => {
                         if let Some(deck) = &self.deck {
                             // TODO: review this .clone()
@@ -560,13 +588,40 @@ impl<'a> App<'a> {
                 CurrentScreen::REVIEW => {
                     todo!()
                 },
-                CurrentScreen::CONFIRM => {
+                CurrentScreen::CONFIRM(popup) => {
                     match &key.code {
                         KeyCode::Char('y') => {
-
+                            match popup.action {
+                                ConfirmAction::DeleteCard(card_id) => {
+                                    Card::delete_from_db(&self.db_pool, card_id).await.expect("failed to delete card from db");
+                                    if let Some(deck) = &mut self.deck {
+                                        deck.load_cards(&self.db_pool).await.expect("failed to reload deck");
+                                    };
+                                    self.alert = Some(AlertPopup::new(
+                                        std::time::Duration::new(5, 0), 
+                                        "Deleted card from database".to_string(), 
+                                        AlertPriority::Green, 
+                                    ));
+                                    self.current_screen = CurrentScreen::CARDS;
+                                },
+                                ConfirmAction::DeleteDeck(deck_id) => {
+                                    if let Some(deckset) = &mut self.deckset {
+                                        deckset.delete_deck_with_cards(&self.db_pool, deck_id).await.expect("Failed to delete deck from db");
+                                        self.alert = Some(AlertPopup::new(
+                                            std::time::Duration::new(5, 0), 
+                                            "Deleted deck from database".to_string(), 
+                                            AlertPriority::Green, 
+                                        ));
+                                    }
+                                    self.current_screen = CurrentScreen::DECKS;
+                                },
+                            }
                         },
                         KeyCode::Char('n') | KeyCode::Esc => {
-                            
+                            self.current_screen = match popup.action {
+                                ConfirmAction::DeleteCard(_) => CurrentScreen::CARDS,
+                                ConfirmAction::DeleteDeck(_) => CurrentScreen::DECKS,
+                            };
                         },
                         _ => {},
                     }

@@ -25,6 +25,19 @@ impl Default for Card {
 }
 
 impl Card {
+    pub async fn delete_from_db(connection_pool: &PgPool, card_id: Uuid) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            r#"
+            DELETE FROM cards
+            WHERE id = ($1)
+            "#,
+            card_id
+        ).execute(connection_pool)
+        .await?;
+
+        Ok(())
+    }
+
     pub fn new() -> Self {
         Card {
             id: Uuid::new_v4(),

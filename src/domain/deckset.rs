@@ -45,4 +45,44 @@ impl DeckSet {
             }
         )
     }
+
+    pub async fn reload(&mut self, db: &PgPool) -> Result<(), sqlx::Error> {
+        let raw: Vec<RawDeck> = sqlx::query_as!(
+            RawDeck,
+            r#"
+            SELECT * FROM decks
+            "#,
+        )
+        .fetch_all(db)
+        .await?;
+
+        self.decks = raw.iter().map(Deck::from).collect();
+        Ok(())
+    }
+
+    pub async fn delete_deck_with_cards(&mut self, db: &PgPool, deck_id: Uuid) -> Result<(), sqlx::Error> {
+        // DELETE ALL CARDS IN DECK
+        sqlx::query!(
+            r#"
+            DELETE FROM cards
+            WHERE deck_id = ($1)
+            "#,
+            deck_id
+        ).execute(db)
+        .await?;
+
+        // DELETE DECK
+        sqlx::query!(
+            r#"
+            DELETE FROM decks
+            WHERE id = ($1)
+            "#,
+            deck_id
+        ).execute(db)
+        .await?;
+
+        self.reload(db).await?;
+
+        Ok(())
+    }
 }
