@@ -3,7 +3,7 @@ use super::panes::alertpopup::{AlertPopup, AlertPriority};
 use super::panes::confirm::{ConfirmAction, ConfirmPopup};
 use super::screens::create_card::{CreateCard, CurrentlyEditing};
 use super::screens::create_deck::CreateDeck;
-use super::utils::Tui;
+use super::utils::{Searcher, Tui};
 use crate::domain::card::Card;
 use crate::domain::deck::Deck;
 use crate::domain::deckset::DeckSet;
@@ -46,6 +46,7 @@ pub enum Mode {
     #[default]
     NORMAL,
     INSERT,
+    SEARCH(Searcher),
 }
 
 impl Display for Mode {
@@ -53,6 +54,7 @@ impl Display for Mode {
         let str_rep = match self {
             Mode::NORMAL => "NORMAL",
             Mode::INSERT => "INSERT",
+            Mode::SEARCH(_) => "SEARCH",
         };
         f.write_str(str_rep)
     }
@@ -202,6 +204,47 @@ impl<'a> Widget for &mut App<'a> {
                 ratatui::widgets::StatefulWidget::render(list, main_area, buf, &mut self.pointer);
             }
             CurrentScreen::DECKS => {
+                let text = match &self.mode {
+                    Mode::SEARCH(searcher) => {
+                        searcher.get_text()
+                    },
+                    _ => {
+                        match &self.deckset {
+                            Some(d) => d.decks.iter().map(|deck| deck.name.clone()).collect(),
+                            None => {
+                                self.alert = Some(AlertPopup::new(
+                                    std::time::Duration::new(5, 0),
+                                    "No decks found".to_string(),
+                                    AlertPriority::Yellow,
+                                ));
+                                Vec::new()
+                            }
+                        }
+                    },
+                };
+                
+                let main_area = match &self.mode {
+                    Mode::NORMAL | Mode::INSERT => {
+                        main_area
+                    },
+                    Mode::SEARCH(searcher) => {
+                        let layout = Layout::default()
+                            .direction(Direction::Vertical)
+                            .constraints(vec![
+                                Constraint::Percentage(100),
+                                Constraint::Min(3),
+                            ])
+                            .split(main_area);
+                        let (main_area, search_bar_area) = (layout[0], layout[1]);
+                        
+                        // Render search bar
+                        Paragraph::new(searcher.get_search_string())
+                                .block(Block::default().borders(Borders::ALL))
+                                .render(search_bar_area, buf);
+                        main_area
+                    },
+                };
+
                 let title = Title::from("DECKS".to_string());
                 let instructions = Title::from(Line::from(vec![
                     "[ [n] to create deck, [b] to go back ]".into(),
@@ -217,32 +260,21 @@ impl<'a> Widget for &mut App<'a> {
                     .borders(Borders::ALL)
                     .border_set(border::THICK);
 
-                // help
-                let decklist: Vec<String> = match &self.deckset {
-                    Some(d) => d.decks.iter().map(|deck| deck.name.clone()).collect(),
-                    None => {
-                        self.alert = Some(AlertPopup::new(
-                            std::time::Duration::new(5, 0),
-                            "No decks found".to_string(),
-                            AlertPriority::Yellow,
-                        ));
-                        Vec::new()
-                    }
-                };
+
 
                 // TODO: factor out
                 let nums_col_width = 4usize;
-                let nums: Vec<String> = (1..decklist.len() + 1).map(|val| val.to_string()).collect();
+                let nums: Vec<String> = (1..text.len() + 1).map(|val| val.to_string()).collect();
                 let nums: Vec<String> = nums
                     .iter()
                     .map(|s| format!("{}{}", s, " ".repeat(nums_col_width - s.len())))
                     .collect();
                 let list_text: Vec<String> = nums
                     .iter()
-                    .zip(decklist.iter())
+                    .zip(text.iter())
                     .map(|(a,b)| format!("{} {}", a, b))
                     .collect();
-                self.n_items = decklist.len();
+                self.n_items = text.len();
 
                 let list = List::new(list_text)
                     .block(block)
@@ -322,85 +354,115 @@ impl<'a> App<'a> {
         if let Event::Key(key) = event {
             match &self.current_screen {
                 // Main screen lists cards
-                CurrentScreen::DECKS => match &key.code {
-                    Char('q') => self.should_quit = true,
-                    Char('j') => {
-                        // how to set back to None?
-                        if self.n_items != 0 {
-                            let selected = match self.pointer.selected() {
-                                Some(val) => {
-                                    if val < self.n_items - 1 {
-                                        val + 1
+                CurrentScreen::DECKS => match &mut self.mode {
+                    Mode::NORMAL | Mode::INSERT => match &key.code {
+                        Char('q') => self.should_quit = true,
+                        Char('j') => {
+                            // how to set back to None?
+                            if self.n_items != 0 {
+                                let selected = match self.pointer.selected() {
+                                    Some(val) => {
+                                        if val < self.n_items - 1 {
+                                            val + 1
+                                        } else {
+                                            val
+                                        }
+                                    }
+                                    None => 0usize,
+                                };
+                                self.pointer.select(Some(selected));
+                            }
+                        }
+                        Char('k') => {
+                            if let Some(val) = self.pointer.selected() {
+                                self.pointer.select(Some(val.saturating_sub(1)));
+                            }
+                        }
+                        Char('n') => {
+                            // Create new deck
+                            self.current_screen = CurrentScreen::CreateDeck;
+                        }
+                        Char('d') => {
+                            match &self.deckset {
+                                Some(deckset) => {
+                                    if let Some(curr_deck) = deckset.decks.get(self.pointer.selected().unwrap_or(0usize)) {
+                                        tracing::info!("Deleting deck: {}", curr_deck.name);
+                                        let popup = ConfirmPopup {
+                                            text: format!("Are you sure you want to delete deck '{}'?\n All of its cards will be also be deleted!", curr_deck.name),
+                                            action: ConfirmAction::DeleteDeck(curr_deck.id),
+                                        };
+                                        self.current_screen = CurrentScreen::CONFIRM(popup);
                                     } else {
-                                        val
+                                        self.alert = Some(AlertPopup::new(std::time::Duration::new(5,0), "No deck selected".to_string(), AlertPriority::Yellow));
                                     }
                                 }
-                                None => 0usize,
-                            };
-                            self.pointer.select(Some(selected));
-                        }
-                    }
-                    Char('k') => {
-                        if let Some(val) = self.pointer.selected() {
-                            self.pointer.select(Some(val.saturating_sub(1)));
-                        }
-                    }
-                    Char('n') => {
-                        // Create new deck
-                        self.current_screen = CurrentScreen::CreateDeck;
-                    }
-                    Char('d') => {
-                        match &self.deckset {
-                            Some(deckset) => {
-                                if let Some(curr_deck) = deckset.decks.get(self.pointer.selected().unwrap_or(0usize)) {
-                                    tracing::info!("Deleting deck: {}", curr_deck.name);
-                                    let popup = ConfirmPopup {
-                                        text: format!("Are you sure you want to delete deck '{}'?\n All of its cards will be also be deleted!", curr_deck.name),
-                                        action: ConfirmAction::DeleteDeck(curr_deck.id),
-                                    };
-                                    self.current_screen = CurrentScreen::CONFIRM(popup);
-                                } else {
+                                None => {
                                     self.alert = Some(AlertPopup::new(std::time::Duration::new(5,0), "No deck selected".to_string(), AlertPriority::Yellow));
-                                }
+                                },
                             }
-                            None => {
-                                self.alert = Some(AlertPopup::new(std::time::Duration::new(5,0), "No deck selected".to_string(), AlertPriority::Yellow));
-                            },
                         }
-                    }
-                    KeyCode::Enter => {
-                        // TODO: go to `cards` screen for current deck
-                        match &self.deckset {
-                            // Check we have a deckset
-                            Some(deckset) => {
-                                // Check we have a valid "pointer" to selected deck
-                                if let Some(curr_deck) =
-                                    deckset.decks.get(self.pointer.selected().unwrap_or(0usize))
-                                {
-                                    let mut deck = curr_deck.clone();
-                                    match deck.load_cards(&self.db_pool).await {
-                                        // TODO: refactor alert generator
-                                        Ok(_) => {}
-                                        Err(e) => {
-                                            tracing::error!("failed to load cards {}", e);
-                                            self.alert = Some(AlertPopup::new(
-                                                std::time::Duration::new(5, 0),
-                                                "Error: Failed to load cards in deck.".to_string(),
-                                                AlertPriority::Red,
-                                            ));
-                                        }
+                        KeyCode::Enter => {
+                            match &self.deckset {
+                                // Check we have a deckset
+                                Some(deckset) => {
+                                    // Check we have a valid "pointer" to selected deck
+                                    if let Some(curr_deck) =
+                                        deckset.decks.get(self.pointer.selected().unwrap_or(0usize))
+                                    {
+                                        let mut deck = curr_deck.clone();
+                                        match deck.load_cards(&self.db_pool).await {
+                                            Ok(_) => {}
+                                            Err(e) => {
+                                                tracing::error!("failed to load cards {}", e);
+                                                self.alert = Some(AlertPopup::new(
+                                                    std::time::Duration::new(5, 0),
+                                                    "Error: Failed to load cards in deck.".to_string(),
+                                                    AlertPriority::Red,
+                                                ));
+                                            }
+                                        };
+                                        self.deck = Some(deck);
+                                        // Set ListState to default
+                                        self.pointer = ListState::default(); 
+                                        self.current_screen = CurrentScreen::CARDS;
                                     };
-                                    self.deck = Some(deck);
-                                    // Set ListState to default
-                                    self.pointer = ListState::default(); 
-                                    self.current_screen = CurrentScreen::CARDS;
-                                };
+                                }
+                                None => {}
                             }
-                            None => {}
                         }
-                    }
-                    _ => {}
-                },
+                        KeyCode::Char('/') => {
+                            tracing::info!("searching in decks");
+                            // TODO: fix!
+                            self.mode = Mode::SEARCH(Searcher::new(
+                                self.deckset
+                                    .as_ref()
+                                    .unwrap()
+                                    .decks
+                                    .iter()
+                                    .map(|d| d.name.clone())
+                                    .collect()
+                                ));
+                        }
+                        _ => {}
+                    },
+                    Mode::SEARCH(ref mut searcher) => {
+                        match &key.code {
+                            KeyCode::Esc => self.mode = Mode::NORMAL,
+                            KeyCode::Char(ch) => {
+                                searcher.push_and_search(*ch);
+                                searcher.build_index();
+                                searcher.search();
+                            },
+                            KeyCode::Backspace => {
+                                searcher.pop_and_search();
+                                searcher.build_index();
+                                searcher.search();
+                            },
+                            _ => {},
+                        }
+                    }, 
+                }
+
 
                 // DISPLAY CARDS
                 CurrentScreen::CARDS => match &key.code {
@@ -517,6 +579,7 @@ impl<'a> App<'a> {
                                 KeyCode::Esc => self.mode = Mode::NORMAL,
                                 _ => {}
                             },
+                            Mode::SEARCH(_) => todo!(),
                         }
                     }
                 }
@@ -577,6 +640,7 @@ impl<'a> App<'a> {
                                     _ => {} //TODO:
                                 }
                             }
+                            Mode::SEARCH(_) => todo!(),
                         }
                     }
                 }

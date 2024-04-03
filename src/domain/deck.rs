@@ -1,7 +1,6 @@
 use sqlx::{types::chrono::Utc, PgPool};
 use uuid::Uuid;
 use super::deckset::RawDeck;
-
 use super::card::Card;
 
 #[derive(Debug, Clone)]
@@ -33,7 +32,6 @@ impl Default for Deck {
             cards: None,
         }
     }
-
 }
 
 impl Deck {

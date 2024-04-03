@@ -24,6 +24,7 @@ impl Widget for &StatusBar {
         let color: Color = match self.mode {
             Mode::NORMAL => Color::Green,
             Mode::INSERT => Color::Red,
+            Mode::SEARCH(_) => Color::Yellow,
         };
 
         Paragraph::new(Span::styled(mode_disp, Style::new().fg(color)))
