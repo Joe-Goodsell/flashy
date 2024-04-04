@@ -14,7 +14,7 @@ pub enum Event {
 pub struct EventHandler {
     _tx: mpsc::UnboundedSender<Event>,
     rx: mpsc::UnboundedReceiver<Event>,
-    task: Option<JoinHandle<()>>,
+    _task: Option<JoinHandle<()>>,
 }
 
 impl Default for EventHandler {
@@ -72,7 +72,7 @@ impl EventHandler {
         Self {
             _tx,
             rx,
-            task: Some(task),
+            _task: Some(task),
         }
     }
 

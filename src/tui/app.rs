@@ -1,7 +1,7 @@
 use super::event_handler::{self, Event};
 use super::panes::alertpopup::{AlertPopup, AlertPriority};
 use super::panes::confirm::{ConfirmAction, ConfirmPopup};
-use super::screens::create_card::{CreateCard, CurrentlyEditing};
+use super::screens::create_card::CreateCard;
 use super::screens::create_deck::CreateDeck;
 use super::utils::{Searcher, Tui};
 use crate::domain::card::Card;
@@ -317,8 +317,7 @@ impl<'a> Widget for &mut App<'a> {
             if !alert.is_valid() {
                 self.alert = None;
             }
-        };
-    }
+        };   }
 }
 
 impl<'a> App<'a> {
