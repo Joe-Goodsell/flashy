@@ -125,8 +125,29 @@ impl Searcher {
     }
 
     pub fn build_index(&mut self) {
-        self.table = (1..self.search_string.len()+1).collect();
-        assert!(self.table.len() == self.search_string.len());
+        tracing::info!("Building index table on {}", self.search_string);
+
+        self.table = vec![0usize; self.search_string.len() + 1];
+        if self.search_string.len() <= 1 { return; }
+
+        let (mut pref_ind, mut suff_ind) = (0usize, 1usize);
+        let ss_bytes: Vec<u8> = self.search_string.bytes().collect();
+        while suff_ind < ss_bytes.len() {
+            tracing::info!("suff_ind is {}", suff_ind);
+            if ss_bytes[pref_ind] == ss_bytes[suff_ind] {
+                tracing::info!("match on {} and {}", ss_bytes[pref_ind], ss_bytes[suff_ind]);
+                self.table[suff_ind+1] = self.table[suff_ind] + 1;
+                pref_ind += 1; 
+                suff_ind += 1;
+            } else {
+                tracing::info!("no match");
+                while suff_ind < ss_bytes.len() && ss_bytes[pref_ind] != ss_bytes[suff_ind] {
+                    suff_ind += 1;
+                    tracing::info!("suf_ind incr to {}", suff_ind);
+                }
+            }
+        }
+        tracing::info!("Index table built: {:?}", self.table);
     }
 
 
@@ -188,7 +209,7 @@ impl Searcher {
         tracing::info!("performing kmp search, searching for `{}` in `{}`...", search_string, text);
         // ptr0 -> search string
         // ptr1 -> text
-        let (mut ptr0, mut ptr1) = (0usize, 0usize);
+        let (mut ss_ptr, mut txt_ptr) = (0usize, 0usize);
         let search_bytes = search_string.as_bytes();
         let text_bytes = text.as_bytes();
 
@@ -196,16 +217,17 @@ impl Searcher {
             return true;
         }
 
-        while (ptr0 + ptr1) < text.len() {
-            if search_bytes.get(ptr0).unwrap() == text_bytes.get(ptr0 + ptr1).unwrap() {
-                ptr0 += 1;
-                if ptr0 >= search_string.len() {
-                    tracing::info!("result: found!");
-                    return true;
+        while txt_ptr < text_bytes.len() && ss_ptr < search_bytes.len() {
+            if search_bytes[ss_ptr] == text_bytes[txt_ptr] {
+                ss_ptr += 1; txt_ptr += 1;
+                if ss_ptr >= search_bytes.len() { 
+                    tracing::info!("found string {} in {}", search_string, text);
+                    return true; 
                 }
+            } else if ss_ptr == 0 {
+                txt_ptr += 1;
             } else {
-                ptr1 += index_table.get(ptr0).unwrap();
-                ptr0 = 0usize;
+                ss_ptr = index_table[ss_ptr];
             }
         }
         tracing::info!("result: not found");
@@ -214,3 +236,13 @@ impl Searcher {
 }
 
 // TODO: testing for search algo
+
+
+/*
+Let's say we have search string `ABCAB`
+We want to find proper "prefix-suffix" substrings (i.e. repeated substrings)
+
+ABCAB
+00012
+
+*/
