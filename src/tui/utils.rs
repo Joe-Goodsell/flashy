@@ -82,11 +82,12 @@ pub struct Searcher {
 }
 
 impl Searcher {
-    pub fn new(text: Vec<String>) -> Self {
+    pub fn new(text: Vec<&str>) -> Self {
         // TODO: rewrite
         let mut searcher = Self {
             search_string: String::new(),
-            text,
+            //TODO: need to clarify &str or String
+            text: text.iter().map(|s| s.to_string()).collect(),
             table: Vec::new(),
             valid_strings: Vec::new(),
         };
@@ -152,12 +153,6 @@ impl Searcher {
 
 
     /// Build the index table etc.
-    /// 
-    /// text  : HELLO I AM DOG
-    /// string:  ELLG 
-    ///          ^^^^
-    ///          1234
-    ///              ELLG
     pub fn build(&mut self) {
         self.build_index();
         self.valid_strings = vec![true; self.text.len()];
@@ -173,14 +168,12 @@ impl Searcher {
             .collect()
     }
 
+    pub fn get_index_table(&self) -> Vec<usize> {
+        self.table.clone()
+    }
+
     /// Search
     pub fn search(&mut self) {
-        /*
-        Approach: 
-            - Build lookup table [1,2,...,n] wher n = search_string.len()
-            - Perform KMP on each string in `text` where `valid_string` is set to `true`
-            - Where search string not in list of strings, set to `false` in `valid_strings`
-         */
         tracing::info!("SEARCHING");
 
         for (b, t) in self.valid_strings.iter_mut().zip(self.text.iter()) {
@@ -189,7 +182,6 @@ impl Searcher {
                 *b = Self::kmp(&self.search_string, t, &self.table);
             }
         }
-
 
         let _ = self.valid_strings
             .iter_mut()
@@ -207,8 +199,6 @@ impl Searcher {
 
     fn kmp(search_string: &str, text: &str, index_table: &[usize]) -> bool {
         tracing::info!("performing kmp search, searching for `{}` in `{}`...", search_string, text);
-        // ptr0 -> search string
-        // ptr1 -> text
         let (mut ss_ptr, mut txt_ptr) = (0usize, 0usize);
         let search_bytes = search_string.as_bytes();
         let text_bytes = text.as_bytes();
@@ -236,13 +226,19 @@ impl Searcher {
 }
 
 // TODO: testing for search algo
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-
-/*
-Let's say we have search string `ABCAB`
-We want to find proper "prefix-suffix" substrings (i.e. repeated substrings)
-
-ABCAB
-00012
-
-*/
+    #[test]
+    fn test_index_table_correct() {
+        let mut searcher = Searcher {
+            search_string: "abcdab".to_string(),
+            text: Vec::new(),
+            table: Vec::new(),
+            valid_strings: Vec::new(),
+        };
+        searcher.build();
+        assert_eq!(vec![0, 0, 0, 0, 0, 1, 2], searcher.get_index_table());
+    }
+}

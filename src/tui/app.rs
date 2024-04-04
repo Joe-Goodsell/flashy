@@ -439,7 +439,7 @@ impl<'a> App<'a> {
                                     .unwrap()
                                     .decks
                                     .iter()
-                                    .map(|d| d.name.clone())
+                                    .map(|d| d.name.as_str())
                                     .collect()
                                 ));
                         }
