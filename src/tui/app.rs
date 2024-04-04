@@ -22,7 +22,7 @@ use ratatui::{
     text::Line,
     widgets::{
         block::{Position, Title},
-        Block, Borders, List, ListState, Padding, Paragraph, Widget, StatefulWidget
+        Block, Borders, List, ListState, Padding, Paragraph, Widget, 
     },
 };
 
@@ -206,6 +206,10 @@ impl<'a> Widget for &mut App<'a> {
             CurrentScreen::DECKS => {
                 let text = match &self.mode {
                     Mode::SEARCH(searcher) => {
+                        /*
+                        TODO:‼️
+                        There is no way to select results!
+                         */
                         searcher.get_text()
                     },
                     _ => {
@@ -247,7 +251,7 @@ impl<'a> Widget for &mut App<'a> {
 
                 let title = Title::from("DECKS".to_string());
                 let instructions = Title::from(Line::from(vec![
-                    "[ [n] to create deck, [b] to go back ]".into(),
+                    "[ [n] to create deck, [/] to search ]".into(),
                 ]));
 
                 let block = Block::default()
@@ -294,10 +298,9 @@ impl<'a> Widget for &mut App<'a> {
             }
 
             CurrentScreen::CreateCard => {
-                let mut state = CurrentlyEditing::FrontText;
 
                 if let Some(create_screen) = &self.create_screen {
-                    create_screen.render(main_area, buf, &mut state);
+                    create_screen.render(main_area, buf);
                 } else {
                     self.create_screen = Some(CreateCard::default());
                 }
@@ -432,7 +435,6 @@ impl<'a> App<'a> {
                         }
                         KeyCode::Char('/') => {
                             tracing::info!("searching in decks");
-                            // TODO: fix!
                             self.mode = Mode::SEARCH(Searcher::new(
                                 self.deckset
                                     .as_ref()

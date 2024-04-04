@@ -1,7 +1,7 @@
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use uuid::Uuid;
 
-use crate::tui::{app::CurrentScreen, utils::{create_centred_rect_by_percent, create_centred_rect_by_size}};
+use crate::tui::utils::create_centred_rect_by_percent;
 
 
 #[derive(Debug)]

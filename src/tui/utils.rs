@@ -83,7 +83,6 @@ pub struct Searcher {
 
 impl Searcher {
     pub fn new(text: Vec<&str>) -> Self {
-        // TODO: rewrite
         let mut searcher = Self {
             search_string: String::new(),
             //TODO: need to clarify &str or String
@@ -109,15 +108,18 @@ impl Searcher {
     /// Push character to search string (and rebuilds index table)
     pub fn push_and_search(&mut self, character: char) {
         self.search_string.push(character);
+        // TODO: cache table
         self.build_index();
-
     }
 
     /// Pop character from search string (and rebuilds index table)
     /// TODO: cache previous results for speed
     pub fn pop_and_search(&mut self) {
         self.search_string.pop();
-        self.build_index();
+        
+        // 🤔
+        self.table.pop();
+
         // Consider cacheing here for speed when deleting chars
         for b in self.valid_strings.iter_mut() {
             *b = true;
@@ -203,6 +205,9 @@ impl Searcher {
         let search_bytes = search_string.as_bytes();
         let text_bytes = text.as_bytes();
 
+        // TODO: return pointers to matching chars to highlight
+        let match_chars: Vec::<&u8> = Vec::new();
+
         if search_bytes.is_empty() {
             return true;
         }
@@ -225,7 +230,6 @@ impl Searcher {
     }
 }
 
-// TODO: testing for search algo
 #[cfg(test)]
 mod tests {
     use super::*;

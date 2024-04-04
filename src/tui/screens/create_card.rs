@@ -55,11 +55,10 @@ impl From<&Card> for CreateCard {
     }
 }
 
-impl StatefulWidget for &CreateCard {
-    type State = CurrentlyEditing;
+impl Widget for &CreateCard {
     /// Intended to render a popup window with fields `Front Text`, `Back Text`
     /// And a select menu for an existing Deck (TODO:)
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+    fn render(self, area: Rect, buf: &mut Buffer) {
         let popup_area: Rect = create_centred_rect_by_percent(50u16, 50u16, area);
 
         let block = Block::default()

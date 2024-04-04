@@ -107,10 +107,6 @@ impl Deck {
         Ok(())
     }
 
-    pub fn load(name: &str) -> Result<Self, std::io::Error> {
-        todo!()
-    }
-
     // TODO: fix this
     // pub fn iter(&self) -> impl Iterator<Item = &RawCard> {
     //     self.cards.iter()
