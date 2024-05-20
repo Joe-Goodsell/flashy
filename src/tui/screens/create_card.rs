@@ -21,6 +21,7 @@ pub struct CreateCard {
     pub card: Card,
     pub mode: Mode,
     pub state: CurrentlyEditing,
+    pub cursor_position: (u16, u16),
 }
 
 #[derive(Default, Debug, Clone)]
@@ -40,6 +41,7 @@ impl Default for CreateCard {
             card: Card::new(),
             mode: Mode::default(),
             state: CurrentlyEditing::default(),
+            cursor_position: (0u16, 0u16),
         }
     }
 }
@@ -51,6 +53,7 @@ impl From<&Card> for CreateCard {
             card: card.clone(),
             mode: Mode::default(),
             state: CurrentlyEditing::default(),
+            cursor_position: (0u16, 0u16),
         }
     }
 }

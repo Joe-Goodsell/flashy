@@ -3,7 +3,10 @@ use super::panes::alertpopup::{AlertPopup, AlertPriority};
 use super::panes::confirm::{ConfirmAction, ConfirmPopup};
 use super::screens::create_card::CreateCard;
 use super::screens::create_deck::CreateDeck;
-use super::utils::{Searcher, Tui};
+use super::{
+    utils,
+    utils::{Searcher, Tui},
+};
 use crate::domain::card::Card;
 use crate::domain::deck::Deck;
 use crate::domain::deckset::DeckSet;
@@ -11,6 +14,7 @@ use crate::tui::panes::statusbar::StatusBar;
 use color_eyre::eyre;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyCode::Char;
+use ratatui::Frame;
 use std::fmt::Display;
 
 // UI
@@ -22,7 +26,7 @@ use ratatui::{
     text::Line,
     widgets::{
         block::{Position, Title},
-        Block, Borders, List, ListState, Padding, Paragraph, Widget, 
+        Block, Borders, List, ListState, Padding, Paragraph, Widget,
     },
 };
 
@@ -78,13 +82,14 @@ pub struct App<'a> {
     deck: Option<Deck>,
     deckset: Option<DeckSet>,
     db_pool: PgPool, // TODO: should be optional?
+    current_list: Vec<String>,
     pointer: ListState,
     n_items: usize, // number of items, e.g. list items, currently displayed
+    cursor_position: Option<(u16, u16)>,
 }
 
 impl<'a> Widget for &mut App<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-
         // Calculate area for main pane and status bar
         // And render statusbar if it exists
         let main_area = match &mut self.statusbar {
@@ -101,7 +106,7 @@ impl<'a> Widget for &mut App<'a> {
                 main_area
             }
             // If there's no statusbar to render, the "main area" is just "area"
-            None => area, 
+            None => area,
         };
 
         self.n_items = 0usize;
@@ -175,18 +180,8 @@ impl<'a> Widget for &mut App<'a> {
                     None => Vec::new(),
                 };
 
-                let nums_col_width = 4usize;
-                let nums: Vec<String> = (1..cards.len() + 1).map(|val| val.to_string()).collect();
-                let nums: Vec<String> = nums
-                    .iter()
-                    .map(|s| format!("{}{}", s, " ".repeat(nums_col_width - s.len())))
-                    .collect();
-                let list_text: Vec<String> = nums
-                    .iter()
-                    .zip(cards.iter())
-                    .map(|(a,b)| format!("{} {}", a, b))
-                    .collect();
-
+                self.current_list = cards.clone();
+                let list_text = utils::add_nums_to_text(cards);
                 if list_text.is_empty() {
                     self.alert = Some(AlertPopup::new(
                         std::time::Duration::new(5, 0),
@@ -194,8 +189,6 @@ impl<'a> Widget for &mut App<'a> {
                         AlertPriority::Yellow,
                     ));
                 }
-                self.n_items = list_text.len();
-
                 let list = List::new(list_text)
                     .block(block)
                     .highlight_symbol(">> ")
@@ -211,42 +204,35 @@ impl<'a> Widget for &mut App<'a> {
                         There is no way to select results!
                          */
                         searcher.get_text()
-                    },
-                    _ => {
-                        match &self.deckset {
-                            Some(d) => d.decks.iter().map(|deck| deck.name.clone()).collect(),
-                            None => {
-                                self.alert = Some(AlertPopup::new(
-                                    std::time::Duration::new(5, 0),
-                                    "No decks found".to_string(),
-                                    AlertPriority::Yellow,
-                                ));
-                                Vec::new()
-                            }
+                    }
+                    _ => match &self.deckset {
+                        Some(d) => d.decks.iter().map(|deck| deck.name.clone()).collect(),
+                        None => {
+                            self.alert = Some(AlertPopup::new(
+                                std::time::Duration::new(5, 0),
+                                "No decks found".to_string(),
+                                AlertPriority::Yellow,
+                            ));
+                            Vec::new()
                         }
                     },
                 };
-                
+
                 let main_area = match &self.mode {
-                    Mode::NORMAL | Mode::INSERT => {
-                        main_area
-                    },
+                    Mode::NORMAL | Mode::INSERT => main_area,
                     Mode::SEARCH(searcher) => {
                         let layout = Layout::default()
                             .direction(Direction::Vertical)
-                            .constraints(vec![
-                                Constraint::Percentage(100),
-                                Constraint::Min(3),
-                            ])
+                            .constraints(vec![Constraint::Percentage(100), Constraint::Min(3)])
                             .split(main_area);
                         let (main_area, search_bar_area) = (layout[0], layout[1]);
-                        
+
                         // Render search bar
                         Paragraph::new(searcher.get_search_string())
-                                .block(Block::default().borders(Borders::ALL))
-                                .render(search_bar_area, buf);
+                            .block(Block::default().borders(Borders::ALL))
+                            .render(search_bar_area, buf);
                         main_area
-                    },
+                    }
                 };
 
                 let title = Title::from("DECKS".to_string());
@@ -264,21 +250,8 @@ impl<'a> Widget for &mut App<'a> {
                     .borders(Borders::ALL)
                     .border_set(border::THICK);
 
-
-
-                // TODO: factor out
-                let nums_col_width = 4usize;
-                let nums: Vec<String> = (1..text.len() + 1).map(|val| val.to_string()).collect();
-                let nums: Vec<String> = nums
-                    .iter()
-                    .map(|s| format!("{}{}", s, " ".repeat(nums_col_width - s.len())))
-                    .collect();
-                let list_text: Vec<String> = nums
-                    .iter()
-                    .zip(text.iter())
-                    .map(|(a,b)| format!("{} {}", a, b))
-                    .collect();
-                self.n_items = text.len();
+                let list_text = utils::add_nums_to_text(text.to_vec());
+                self.n_items = list_text.len();
 
                 let list = List::new(list_text)
                     .block(block)
@@ -298,7 +271,6 @@ impl<'a> Widget for &mut App<'a> {
             }
 
             CurrentScreen::CreateCard => {
-
                 if let Some(create_screen) = &self.create_screen {
                     create_screen.render(main_area, buf);
                 } else {
@@ -308,7 +280,7 @@ impl<'a> Widget for &mut App<'a> {
             CurrentScreen::REVIEW => todo!(),
             CurrentScreen::CONFIRM(popup) => {
                 popup.render(main_area, buf);
-            },
+            }
         }
 
         // Renders top-right 'alert' popup, and sets to None when times out
@@ -317,7 +289,8 @@ impl<'a> Widget for &mut App<'a> {
             if !alert.is_valid() {
                 self.alert = None;
             }
-        };   }
+        };
+    }
 }
 
 impl<'a> App<'a> {
@@ -332,12 +305,14 @@ impl<'a> App<'a> {
             should_quit: false,
             deck: None,
             deckset: None,
+            current_list: Vec::new(),
             db_pool,
             pointer: ListState::default(),
             n_items: 0usize,
+            cursor_position: todo!(),
         }
     }
-    
+
     /// Fetches a `DeckSet` containing all saved decks (without loading cards)
     async fn fetch_decks(&mut self) -> Result<(), sqlx::Error> {
         match DeckSet::load_from_db(&self.db_pool).await {
@@ -384,26 +359,35 @@ impl<'a> App<'a> {
                             // Create new deck
                             self.current_screen = CurrentScreen::CreateDeck;
                         }
-                        Char('d') => {
-                            match &self.deckset {
-                                Some(deckset) => {
-                                    if let Some(curr_deck) = deckset.decks.get(self.pointer.selected().unwrap_or(0usize)) {
-                                        tracing::info!("Deleting deck: {}", curr_deck.name);
-                                        let popup = ConfirmPopup {
+                        Char('d') => match &self.deckset {
+                            Some(deckset) => {
+                                if let Some(curr_deck) =
+                                    deckset.decks.get(self.pointer.selected().unwrap_or(0usize))
+                                {
+                                    tracing::info!("Deleting deck: {}", curr_deck.name);
+                                    let popup = ConfirmPopup {
                                             text: format!("Are you sure you want to delete deck '{}'?\n All of its cards will be also be deleted!", curr_deck.name),
                                             action: ConfirmAction::DeleteDeck(curr_deck.id),
                                         };
-                                        self.current_screen = CurrentScreen::CONFIRM(popup);
-                                    } else {
-                                        self.alert = Some(AlertPopup::new(std::time::Duration::new(5,0), "No deck selected".to_string(), AlertPriority::Yellow));
-                                    }
+                                    self.current_screen = CurrentScreen::CONFIRM(popup);
+                                } else {
+                                    self.alert = Some(AlertPopup::new(
+                                        std::time::Duration::new(5, 0),
+                                        "No deck selected".to_string(),
+                                        AlertPriority::Yellow,
+                                    ));
                                 }
-                                None => {
-                                    self.alert = Some(AlertPopup::new(std::time::Duration::new(5,0), "No deck selected".to_string(), AlertPriority::Yellow));
-                                },
                             }
-                        }
+                            None => {
+                                self.alert = Some(AlertPopup::new(
+                                    std::time::Duration::new(5, 0),
+                                    "No deck selected".to_string(),
+                                    AlertPriority::Yellow,
+                                ));
+                            }
+                        },
                         KeyCode::Enter => {
+                            // TODO: rewrite to use stored Uuid for deck retrieval, rather than assumign that n decks *displayed* is same as n decks (this is to achieve compatibility with selecting items when searching)
                             match &self.deckset {
                                 // Check we have a deckset
                                 Some(deckset) => {
@@ -418,14 +402,15 @@ impl<'a> App<'a> {
                                                 tracing::error!("failed to load cards {}", e);
                                                 self.alert = Some(AlertPopup::new(
                                                     std::time::Duration::new(5, 0),
-                                                    "Error: Failed to load cards in deck.".to_string(),
+                                                    "Error: Failed to load cards in deck."
+                                                        .to_string(),
                                                     AlertPriority::Red,
                                                 ));
                                             }
                                         };
                                         self.deck = Some(deck);
                                         // Set ListState to default
-                                        self.pointer = ListState::default(); 
+                                        self.pointer = ListState::default();
                                         self.current_screen = CurrentScreen::CARDS;
                                     };
                                 }
@@ -441,29 +426,26 @@ impl<'a> App<'a> {
                                     .decks
                                     .iter()
                                     .map(|d| d.name.as_str())
-                                    .collect()
-                                ));
+                                    .collect(),
+                            ));
                         }
                         _ => {}
                     },
-                    Mode::SEARCH(ref mut searcher) => {
-                        match &key.code {
-                            KeyCode::Esc => self.mode = Mode::NORMAL,
-                            KeyCode::Char(ch) => {
-                                searcher.push_and_search(*ch);
-                                searcher.build_index();
-                                searcher.search();
-                            },
-                            KeyCode::Backspace => {
-                                searcher.pop_and_search();
-                                searcher.build_index();
-                                searcher.search();
-                            },
-                            _ => {},
+                    Mode::SEARCH(ref mut searcher) => match &key.code {
+                        KeyCode::Esc => self.mode = Mode::NORMAL,
+                        KeyCode::Char(ch) => {
+                            searcher.push_and_search(*ch);
+                            searcher.build_index();
+                            searcher.search();
                         }
-                    }, 
-                }
-
+                        KeyCode::Backspace => {
+                            searcher.pop_and_search();
+                            searcher.build_index();
+                            searcher.search();
+                        }
+                        _ => {}
+                    },
+                },
 
                 // DISPLAY CARDS
                 CurrentScreen::CARDS => match &key.code {
@@ -493,52 +475,52 @@ impl<'a> App<'a> {
                         self.current_screen = CurrentScreen::DECKS;
                     }
                     Char('n') => {
-                        // Create new card 
-                        self.create_screen = Some(
-                            CreateCard::from(&Card::new_with_deck(self.deck.as_ref().unwrap().id))
-                        );
+                        // Create new card
+                        self.create_screen = Some(CreateCard::from(&Card::new_with_deck(
+                            self.deck.as_ref().unwrap().id,
+                        )));
                         self.current_screen = CurrentScreen::CreateCard;
                     }
                     Char('d') => {
                         if let Some(deck) = &self.deck {
-                            if let Some(card) = deck.cards
+                            if let Some(card) = deck
+                                .cards
                                 .clone()
                                 .unwrap_or(Vec::<Card>::new())
-                                .get(self.pointer.selected().unwrap_or(0usize)) {
+                                .get(self.pointer.selected().unwrap_or(0usize))
+                            {
                                 self.current_screen = CurrentScreen::CONFIRM(ConfirmPopup {
                                     text: "Are you sure you want to delete this card?".to_string(),
                                     action: ConfirmAction::DeleteCard(card.id),
                                 });
                                 self.pointer = ListState::default();
                             } else {
-                                self.alert = Some(
-                                    AlertPopup::new(
-                                        std::time::Duration::new(5, 0),
-                                        "Warning: No card selected".to_string(), 
-                                        AlertPriority::Yellow
-                                    )
-                                );
+                                self.alert = Some(AlertPopup::new(
+                                    std::time::Duration::new(5, 0),
+                                    "Warning: No card selected".to_string(),
+                                    AlertPriority::Yellow,
+                                ));
                             }
                         }
-                    },
+                    }
                     KeyCode::Enter => {
                         if let Some(deck) = &self.deck {
                             // TODO: review this .clone()
-                            if let Some(card) = deck.cards
+                            if let Some(card) = deck
+                                .cards
                                 .clone()
                                 .unwrap_or(Vec::<Card>::new())
-                                .get(self.pointer.selected().unwrap_or(0usize)) {
+                                .get(self.pointer.selected().unwrap_or(0usize))
+                            {
                                 self.current_screen = CurrentScreen::CreateCard;
                                 self.pointer = ListState::default();
                                 self.create_screen = Some(CreateCard::from(card));
                             } else {
-                                self.alert = Some(
-                                    AlertPopup::new(
-                                        std::time::Duration::new(5, 0),
-                                        "Warning: No card selected".to_string(), 
-                                        AlertPriority::Yellow
-                                    )
-                                );
+                                self.alert = Some(AlertPopup::new(
+                                    std::time::Duration::new(5, 0),
+                                    "Warning: No card selected".to_string(),
+                                    AlertPriority::Yellow,
+                                ));
                             }
                         }
                     }
@@ -601,13 +583,11 @@ impl<'a> App<'a> {
                                             Ok(_) => {
                                                 self.current_screen = CurrentScreen::CARDS;
                                                 self.create_screen = None;
-                                                self.alert = Some(
-                                                    AlertPopup::new(
-                                                        std::time::Duration::new(5,0),
-                                                        "Card saved".to_string(),
-                                                        AlertPriority::Green,
-                                                    )
-                                                );
+                                                self.alert = Some(AlertPopup::new(
+                                                    std::time::Duration::new(5, 0),
+                                                    "Card saved".to_string(),
+                                                    AlertPriority::Green,
+                                                ));
                                                 match deck.load_cards(&self.db_pool).await {
                                                     Ok(_) => tracing::info!("Deck reloaded"),
                                                     Err(e) => tracing::error!(
@@ -617,13 +597,11 @@ impl<'a> App<'a> {
                                                 };
                                             }
                                             Err(e) => {
-                                                self.alert = Some(
-                                                    AlertPopup::new(
-                                                        std::time::Duration::new(5,0),
-                                                        "Error: Failed to save card!".to_string(),
-                                                        AlertPriority::Red,
-                                                    )
-                                                );
+                                                self.alert = Some(AlertPopup::new(
+                                                    std::time::Duration::new(5, 0),
+                                                    "Error: Failed to save card!".to_string(),
+                                                    AlertPriority::Red,
+                                                ));
                                                 tracing::error!("failed to save card {}", e);
                                             }
                                         }
@@ -649,51 +627,64 @@ impl<'a> App<'a> {
                     // Create statusbar once we're past the splash screen
                     self.statusbar = Some(StatusBar::default());
                     self.current_screen = CurrentScreen::DECKS;
-                },
+                }
                 CurrentScreen::REVIEW => {
                     todo!()
-                },
-                CurrentScreen::CONFIRM(popup) => {
-                    match &key.code {
-                        KeyCode::Char('y') => {
-                            match popup.action {
-                                ConfirmAction::DeleteCard(card_id) => {
-                                    Card::delete_from_db(&self.db_pool, card_id).await.expect("failed to delete card from db");
-                                    if let Some(deck) = &mut self.deck {
-                                        deck.load_cards(&self.db_pool).await.expect("failed to reload deck");
-                                    };
-                                    self.alert = Some(AlertPopup::new(
-                                        std::time::Duration::new(5, 0), 
-                                        "Deleted card from database".to_string(), 
-                                        AlertPriority::Green, 
-                                    ));
-                                    self.current_screen = CurrentScreen::CARDS;
-                                },
-                                ConfirmAction::DeleteDeck(deck_id) => {
-                                    if let Some(deckset) = &mut self.deckset {
-                                        deckset.delete_deck_with_cards(&self.db_pool, deck_id).await.expect("Failed to delete deck from db");
-                                        self.alert = Some(AlertPopup::new(
-                                            std::time::Duration::new(5, 0), 
-                                            "Deleted deck from database".to_string(), 
-                                            AlertPriority::Green, 
-                                        ));
-                                    }
-                                    self.current_screen = CurrentScreen::DECKS;
-                                },
-                            }
-                        },
-                        KeyCode::Char('n') | KeyCode::Esc => {
-                            self.current_screen = match popup.action {
-                                ConfirmAction::DeleteCard(_) => CurrentScreen::CARDS,
-                                ConfirmAction::DeleteDeck(_) => CurrentScreen::DECKS,
+                }
+                CurrentScreen::CONFIRM(popup) => match &key.code {
+                    KeyCode::Char('y') => match popup.action {
+                        ConfirmAction::DeleteCard(card_id) => {
+                            Card::delete_from_db(&self.db_pool, card_id)
+                                .await
+                                .expect("failed to delete card from db");
+                            if let Some(deck) = &mut self.deck {
+                                deck.load_cards(&self.db_pool)
+                                    .await
+                                    .expect("failed to reload deck");
                             };
-                        },
-                        _ => {},
+                            self.alert = Some(AlertPopup::new(
+                                std::time::Duration::new(5, 0),
+                                "Deleted card from database".to_string(),
+                                AlertPriority::Green,
+                            ));
+                            self.current_screen = CurrentScreen::CARDS;
+                        }
+                        ConfirmAction::DeleteDeck(deck_id) => {
+                            if let Some(deckset) = &mut self.deckset {
+                                deckset
+                                    .delete_deck_with_cards(&self.db_pool, deck_id)
+                                    .await
+                                    .expect("Failed to delete deck from db");
+                                self.alert = Some(AlertPopup::new(
+                                    std::time::Duration::new(5, 0),
+                                    "Deleted deck from database".to_string(),
+                                    AlertPriority::Green,
+                                ));
+                            }
+                            self.current_screen = CurrentScreen::DECKS;
+                        }
+                    },
+                    KeyCode::Char('n') | KeyCode::Esc => {
+                        self.current_screen = match popup.action {
+                            ConfirmAction::DeleteCard(_) => CurrentScreen::CARDS,
+                            ConfirmAction::DeleteDeck(_) => CurrentScreen::DECKS,
+                        };
                     }
+                    _ => {}
                 },
             }
         }
         Ok(())
+    }
+
+    async fn render_ui(mut self, f: &mut Frame<'_>) {
+        match self.mode {
+            Mode::NORMAL => {},
+            Mode::INSERT => {
+                f.set_cursor(2,2);
+            },
+            Mode::SEARCH(_) => {}, 
+        }
     }
 
     pub async fn run(mut self, mut term: Tui) -> eyre::Result<()> {
@@ -704,7 +695,7 @@ impl<'a> App<'a> {
             Ok(_) => {}
             Err(e) => {
                 // TODO: HANDLE ERROR PROPERLY
-                tracing::info!("COULD NOT FETCH DECKS WITH ERROR {}", e);
+                tracing::error!("COULD NOT FETCH DECKS WITH ERROR {}", e);
             }
         };
 

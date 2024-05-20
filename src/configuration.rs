@@ -37,6 +37,5 @@ pub fn get_config() -> Result<Settings, config::ConfigError> {
         .add_source(config::File::from(config_dir.join("config.yaml")))
         .build()?;
 
-    //TODO: add telemetry
     config.try_deserialize::<Settings>()
 }

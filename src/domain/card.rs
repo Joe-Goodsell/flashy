@@ -49,7 +49,6 @@ impl Card {
         }
     }
 
-    // TODO: don't like this solution
     pub fn new_with_deck(deck_id: Uuid) -> Self {
         Card {
             id: Uuid::new_v4(),

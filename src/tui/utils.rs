@@ -1,19 +1,12 @@
-use std::io::{stdout, Stdout};
 use crossterm::terminal::{
-    disable_raw_mode, 
-    enable_raw_mode, 
-    EnterAlternateScreen, 
-    LeaveAlternateScreen
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use ratatui::{
-    backend::CrosstermBackend, 
-    layout::{
-        Constraint, 
-        Direction, 
-        Layout, 
-        Rect}, 
-    Terminal
+    backend::CrosstermBackend,
+    layout::{Constraint, Direction, Layout, Rect},
+    Terminal,
 };
+use std::io::{stdout, Stdout};
 
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;
 
@@ -24,7 +17,6 @@ pub fn init() -> std::io::Result<Tui> {
     Terminal::new(CrosstermBackend::new(stdout()))
 }
 
-
 /// Restore the terminal to its original state
 pub fn restore() -> std::io::Result<()> {
     crossterm::execute!(stdout(), LeaveAlternateScreen)?;
@@ -34,7 +26,8 @@ pub fn restore() -> std::io::Result<()> {
 
 pub fn create_centred_rect_by_size(size_x: u16, size_y: u16, area: Rect) -> Rect {
     // BUG: this doesn't work properly
-    let centre_rect = Layout::default().direction(Direction::Vertical)
+    let centre_rect = Layout::default()
+        .direction(Direction::Vertical)
         .constraints(vec![
             Constraint::Percentage(100),
             Constraint::Min(size_y),
@@ -42,35 +35,52 @@ pub fn create_centred_rect_by_size(size_x: u16, size_y: u16, area: Rect) -> Rect
         ])
         .split(area);
 
-    Layout::default().direction(Direction::Horizontal)
-            .constraints(vec![
-                Constraint::Percentage(100),
-                Constraint::Min(size_x),
-                Constraint::Percentage(100),
-            ])
-            .split(centre_rect[1])[1]
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(vec![
+            Constraint::Percentage(100),
+            Constraint::Min(size_x),
+            Constraint::Percentage(100),
+        ])
+        .split(centre_rect[1])[1]
 }
 
 pub fn create_centred_rect_by_percent(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     // First split vertical (i.e. splits stack on top of each other)
     // Popup will fill `percent_y` proportion of screen
-    let centre_rect = Layout::default().direction(Direction::Vertical)
+    let centre_rect = Layout::default()
+        .direction(Direction::Vertical)
         .constraints(vec![
-            Constraint::Percentage((100-percent_y) / 2),
+            Constraint::Percentage((100 - percent_y) / 2),
             Constraint::Percentage(percent_y),
-            Constraint::Percentage((100-percent_y) / 2), 
+            Constraint::Percentage((100 - percent_y) / 2),
         ])
         .split(area);
 
-    Layout::default().direction(Direction::Horizontal)
-            .constraints(vec![
-                Constraint::Percentage((100-percent_x) / 2),
-                Constraint::Percentage(percent_x),
-                Constraint::Percentage((100-percent_x) / 2),
-            ])
-            .split(centre_rect[1])[1] // Only take middle rectangles
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(vec![
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(centre_rect[1])[1] // Only take middle rectangles
 }
 
+pub fn add_nums_to_text(text: Vec<String>) -> Vec<String> {
+    let nums_col_width = 4usize;
+    let nums: Vec<String> = (1..text.len() + 1).map(|val| val.to_string()).collect();
+    let nums: Vec<String> = nums
+        .iter()
+        .map(|s| format!("{}{}", s, " ".repeat(nums_col_width - s.len())))
+        .collect();
+    let list_text: Vec<String> = nums
+        .iter()
+        .zip(text.iter())
+        .map(|(a, b)| format!("{} {}", a, b))
+        .collect();
+    list_text
+}
 
 /// Implementation of KMP string search algorithm
 #[derive(Debug, Clone)]
@@ -98,7 +108,6 @@ impl Searcher {
         self.search_string.clone()
     }
 
-
     /// Set search string to value directly
     pub fn set_search_string(&mut self, search_string: &str) {
         self.search_string = search_string.to_string();
@@ -116,10 +125,8 @@ impl Searcher {
     /// TODO: cache previous results for speed
     pub fn pop_and_search(&mut self) {
         self.search_string.pop();
-        
         // 🤔
         self.table.pop();
-
         // Consider cacheing here for speed when deleting chars
         for b in self.valid_strings.iter_mut() {
             *b = true;
@@ -131,7 +138,9 @@ impl Searcher {
         tracing::info!("Building index table on {}", self.search_string);
 
         self.table = vec![0usize; self.search_string.len() + 1];
-        if self.search_string.len() <= 1 { return; }
+        if self.search_string.len() <= 1 {
+            return;
+        }
 
         let (mut pref_ind, mut suff_ind) = (0usize, 1usize);
         let ss_bytes: Vec<u8> = self.search_string.bytes().collect();
@@ -139,8 +148,8 @@ impl Searcher {
             tracing::info!("suff_ind is {}", suff_ind);
             if ss_bytes[pref_ind] == ss_bytes[suff_ind] {
                 tracing::info!("match on {} and {}", ss_bytes[pref_ind], ss_bytes[suff_ind]);
-                self.table[suff_ind+1] = self.table[suff_ind] + 1;
-                pref_ind += 1; 
+                self.table[suff_ind + 1] = self.table[suff_ind] + 1;
+                pref_ind += 1;
                 suff_ind += 1;
             } else {
                 tracing::info!("no match");
@@ -153,7 +162,6 @@ impl Searcher {
         tracing::info!("Index table built: {:?}", self.table);
     }
 
-
     /// Build the index table etc.
     pub fn build(&mut self) {
         self.build_index();
@@ -165,8 +173,8 @@ impl Searcher {
         self.text
             .iter()
             .zip(self.valid_strings.iter())
-            .filter(|(_,b)| **b)
-            .map(|(t,_)| t.clone())
+            .filter(|(_, b)| **b)
+            .map(|(t, _)| t.clone())
             .collect()
     }
 
@@ -185,28 +193,30 @@ impl Searcher {
             }
         }
 
-        let _ = self.valid_strings
+        let _ = self
+            .valid_strings
             .iter_mut()
             .zip(self.text.iter())
             .map(|(is_in_play, text)| {
-                match is_in_play {
-                    true => {
-                        tracing::info!("doing KMP for ss {} in {}", &self.search_string, &text);
-                        *is_in_play = Self::kmp(&self.search_string, text, &self.table);
-                    },
-                    false => {},
+                if is_in_play == &mut true {
+                    tracing::info!("doing KMP for ss {} in {}", &self.search_string, &text);
+                    *is_in_play = Self::kmp(&self.search_string, text, &self.table);
                 }
             });
     }
 
     fn kmp(search_string: &str, text: &str, index_table: &[usize]) -> bool {
-        tracing::info!("performing kmp search, searching for `{}` in `{}`...", search_string, text);
+        tracing::info!(
+            "performing kmp search, searching for `{}` in `{}`...",
+            search_string,
+            text
+        );
         let (mut ss_ptr, mut txt_ptr) = (0usize, 0usize);
         let search_bytes = search_string.as_bytes();
         let text_bytes = text.as_bytes();
 
         // TODO: return pointers to matching chars to highlight
-        let match_chars: Vec::<&u8> = Vec::new();
+        let match_chars: Vec<&u8> = Vec::new();
 
         if search_bytes.is_empty() {
             return true;
@@ -214,15 +224,16 @@ impl Searcher {
 
         while txt_ptr < text_bytes.len() && ss_ptr < search_bytes.len() {
             if search_bytes[ss_ptr] == text_bytes[txt_ptr] {
-                ss_ptr += 1; txt_ptr += 1;
-                if ss_ptr >= search_bytes.len() { 
+                ss_ptr += 1;
+                txt_ptr += 1;
+                if ss_ptr >= search_bytes.len() {
                     tracing::info!("found string {} in {}", search_string, text);
-                    return true; 
+                    return true;
                 }
             } else if ss_ptr == 0 {
                 txt_ptr += 1;
             } else {
-                ss_ptr = index_table[ss_ptr];
+                ss_ptr = index_table[ss_ptr - 1];
             }
         }
         tracing::info!("result: not found");
