@@ -241,6 +241,16 @@ impl Searcher {
     }
 }
 
+
+pub fn styled_list(text: Vec<String>, block: ratatui::widgets::Block) -> ratatui::widgets::List {
+    ratatui::widgets::List::new(text)
+        .block(block)
+        // .highlight_style(Style::new().add_modifier(Modifier::REVERSED))
+        .highlight_style(ratatui::style::Stylize::italic(ratatui::style::Stylize::light_blue(ratatui::style::Style::new())))
+        .highlight_symbol(">>")
+        .repeat_highlight_symbol(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

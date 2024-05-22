@@ -62,7 +62,7 @@ impl<'a> From<&Card> for CreateCard<'a> {
             state: CurrentlyEditing::default(),
             front_text: Rc::new(RefCell::new(TextField::from(card.front_text.clone().unwrap_or("".to_string()).as_str()))),
             back_text: Rc::new(RefCell::new(TextField::from(card.back_text.clone().unwrap_or("".to_string()).as_str()))),
-            cursor: (0u16, 0u16),
+            cursor: (0u16, card.front_text.clone().unwrap_or("".to_string()).len() as u16),
             db_pool: None,
         }
     }
@@ -100,6 +100,11 @@ impl<'a> Widget for &CreateCard<'a> {
         let tmp_front_text = Rc::clone(&self.front_text);
         let tmp_back_text = Rc::clone(&self.back_text);
         {
+            (*tmp_front_text).borrow_mut().update_coords(Some(&area));
+            (*tmp_back_text).borrow_mut().update_coords(Some(&area));
+        }
+        {
+            // ERROR: cloning textfield means I don't set coords!!
             let textfield = (*tmp_front_text).borrow().to_owned();
             textfield.render(text_fields[0], buf);
             let textfield = (*tmp_back_text).borrow();
