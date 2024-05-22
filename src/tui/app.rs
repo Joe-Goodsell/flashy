@@ -272,23 +272,32 @@ impl<'a> Widget for &mut App<'a> {
             }
 
             CurrentScreen::CreateCard => {
-                if let Some(create_screen) = &self.create_screen {
+                if let Some(create_screen) = &mut self.create_screen {
+                    create_screen.render(area, buf);
                     tracing::info!("getting current text field for create card");
                     if let Some(current_text_field) = create_screen.current_text_field() {
                         tracing::info!("textfield exists");
-                        let textfield = current_text_field.borrow();
-                        let cursor_in_text_field = textfield.cursor();
-                        if let Some(area_of_text_field) = textfield.coords() {
-                            let position = area_of_text_field.as_position();
-                            self.cursor = Some((cursor_in_text_field.0 + position.x as usize, cursor_in_text_field.1 + position.y as usize));
-                            tracing::info!("cursor is: {}, {}", self.cursor.unwrap().0, self.cursor.unwrap().1);
-                        } else {
-                            tracing::info!("no coords exist");
+                        let tf_cursor = current_text_field.get_offset_cursor();
+                        if let Some(tf_coords) = current_text_field.coords() {
+                            let tf_pos = tf_coords.as_position();
+                            self.cursor = Some((tf_cursor.0 + tf_pos.x as usize, tf_cursor.1 + tf_pos.y as usize ));
                         }
-                        create_screen.render(main_area, buf);
-                    } else {
-                        tracing::info!("no textfield exists");
                     }
+                    // if let Some(current_text_field) = create_screen.current_text_field() {
+                    //     tracing::info!("textfield exists");
+                    //     let textfield = current_text_field.borrow();
+                    //     let cursor_in_text_field = textfield.cursor();
+                    //     if let Some(area_of_text_field) = textfield.coords() {
+                    //         let position = area_of_text_field.as_position();
+                    //         self.cursor = Some((cursor_in_text_field.0 + position.x as usize, cursor_in_text_field.1 + position.y as usize));
+                    //         tracing::info!("cursor is: {}, {}", self.cursor.unwrap().0, self.cursor.unwrap().1);
+                    //     } else {
+                    //         tracing::info!("no coords exist");
+                    //     }
+                    //     create_screen.render(main_area, buf);
+                    // } else {
+                    //     tracing::info!("no textfield exists");
+                    // }
                 } else {
                     self.create_screen = Some(CreateCard::default());
                 }
@@ -632,9 +641,9 @@ impl<'a> App<'a> {
                                 if let Some(textfield) = create_card.current_text_field() {
                                     match &key.code {
                                         KeyCode::Esc => self.mode = Mode::NORMAL,
-                                        KeyCode::Backspace => textfield.borrow_mut().backspace(),
-                                        KeyCode::Enter => textfield.borrow_mut().insert_newline(),
-                                        Char(ch) => textfield.borrow_mut().insert_char(*ch),
+                                        KeyCode::Backspace => textfield.backspace(),
+                                        KeyCode::Enter => textfield.insert_newline(),
+                                        Char(ch) => textfield.insert_char(*ch),
                                         _ => {} //TODO:
                                     }
                                 }
@@ -724,6 +733,7 @@ impl<'a> App<'a> {
                 tracing::info!("setting cursor...");
                 if let Some(cursor) = self.cursor {
                     tracing::info!("cursor exists");
+                    // TODO: cursor coordinates are flipped
                     f.set_cursor(cursor.0 as u16, cursor.1 as u16);
                 } else {
                     tracing::info!("no cursor found!");
