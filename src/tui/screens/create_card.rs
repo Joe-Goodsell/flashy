@@ -1,3 +1,5 @@
+use std::{borrow::BorrowMut, cell::{RefCell, RefMut}, rc::Rc};
+
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
@@ -10,18 +12,21 @@ use sqlx::PgPool;
 
 use crate::{
     domain::card::Card,
-    tui::{app::Mode, utils::create_centred_rect_by_percent},
+    tui::{app::Mode, panes::text_field::TextField, utils::create_centred_rect_by_percent},
 };
 
 const TEXTBOX_STYLE_EDITING: Style = Style::new().fg(Color::Yellow);
 const TEXTBOX_STYLE_VIEWING: Style = Style::new().fg(Color::LightBlue);
 
 #[derive(Debug, Clone)]
-pub struct CreateCard {
+pub struct CreateCard<'a> {
     pub card: Card,
     pub mode: Mode,
     pub state: CurrentlyEditing,
-    pub cursor_position: (u16, u16),
+    pub front_text: Rc<RefCell<TextField<'a>>>,
+    pub back_text: Rc<RefCell<TextField<'a>>>,
+    pub cursor: (u16, u16),
+    pub db_pool: Option<&'a PgPool>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -32,33 +37,38 @@ pub enum CurrentlyEditing {
     Saving,
 }
 
-
-
 /// TODO: TESTING PURPOSES
-impl Default for CreateCard {
+impl<'a> Default for CreateCard<'a> {
     fn default() -> Self {
+        let front_text = TextField::default();
         CreateCard {
             card: Card::new(),
             mode: Mode::default(),
+            front_text: Rc::new(RefCell::new(front_text)),
+            back_text: Rc::new(RefCell::new(TextField::default())),
             state: CurrentlyEditing::default(),
-            cursor_position: (0u16, 0u16),
+            cursor: (0u16, 0u16),
+            db_pool: None,
         }
     }
 }
 
-impl From<&Card> for CreateCard {
+impl<'a> From<&Card> for CreateCard<'a> {
     fn from(card: &Card) -> Self {
         // WARN: this doesn't account for "reloading" the card stored in the `App`
         Self {
             card: card.clone(),
             mode: Mode::default(),
             state: CurrentlyEditing::default(),
-            cursor_position: (0u16, 0u16),
+            front_text: Rc::new(RefCell::new(TextField::from(card.front_text.clone().unwrap_or("".to_string()).as_str()))),
+            back_text: Rc::new(RefCell::new(TextField::from(card.back_text.clone().unwrap_or("".to_string()).as_str()))),
+            cursor: (0u16, 0u16),
+            db_pool: None,
         }
     }
 }
 
-impl Widget for &CreateCard {
+impl<'a> Widget for &CreateCard<'a> {
     /// Intended to render a popup window with fields `Front Text`, `Back Text`
     /// And a select menu for an existing Deck (TODO:)
     fn render(self, area: Rect, buf: &mut Buffer) {
@@ -84,39 +94,43 @@ impl Widget for &CreateCard {
             .borders(Borders::ALL)
             .padding(Padding::uniform(1));
 
-        let (front_text, back_text) = match self.state {
-            CurrentlyEditing::FrontText => (
-                Span::styled(self.card.front_text.clone().unwrap_or_default(), TEXTBOX_STYLE_EDITING),
-                Span::styled(self.card.back_text.clone().unwrap_or_default(), TEXTBOX_STYLE_VIEWING),
-            ),
-            CurrentlyEditing::BackText => (
-                Span::styled(self.card.front_text.clone().unwrap_or_default(), TEXTBOX_STYLE_VIEWING),
-                Span::styled(self.card.back_text.clone().unwrap_or_default(), TEXTBOX_STYLE_EDITING),
-            ),
-            CurrentlyEditing::Saving => (
-                Span::styled(self.card.front_text.clone().unwrap_or_default(), TEXTBOX_STYLE_VIEWING),
-                Span::styled(self.card.back_text.clone().unwrap_or_default(), TEXTBOX_STYLE_VIEWING),
-            ),
-        };
-
         //POPUP
         Paragraph::default().block(block).render(popup_area, buf);
-        //FRONT_TEXT
-        Paragraph::new(front_text)
-            .block(text_field_block.clone().title("Front".to_string()))
-            .render(text_fields[0], buf);
-        //BACK_FRONT
-        Paragraph::new(back_text)
-            .block(text_field_block.title("Back".to_string()))
-            .render(text_fields[1], buf);
+        
+        let tmp_front_text = Rc::clone(&self.front_text);
+        let tmp_back_text = Rc::clone(&self.back_text);
+        {
+            let textfield = (*tmp_front_text).borrow().to_owned();
+            textfield.render(text_fields[0], buf);
+            let textfield = (*tmp_back_text).borrow();
+            textfield.to_owned().render(text_fields[1], buf);
+        }
     }
 }
 
-impl CreateCard {
+impl<'a> CreateCard<'a> {
+    pub fn current_text_field(&self) -> Option<Rc<RefCell<TextField<'a>>>> {
+        match self.state {
+            //WARN: this is a bit wrong
+            CurrentlyEditing::FrontText => Some(Rc::clone(&self.front_text)),
+            CurrentlyEditing::BackText => Some(Rc::clone(&self.back_text)),
+            _ => None,
+        }
+    }
+
     //TODO: implement saving to db
 
-    pub async fn try_save(&self, db_pool: &PgPool) -> Result<(), sqlx::Error> {
+    pub fn set_db_pool(&mut self, db_pool: &'a PgPool) {
+        self.db_pool = Some(db_pool);
+    }
+
+    pub async fn try_save(&mut self, db_pool: &PgPool) -> Result<(), sqlx::Error> {
+        // WARN: text will not be updated here
         tracing::info!("SAVING: {:?}", self.card);
+        let front_text = Rc::clone(&self.front_text).borrow().to_string();
+        let back_text = Rc::clone(&self.back_text).borrow().to_string();
+        self.card.front_text = Some(front_text);
+        self.card.back_text = Some(back_text);
         self.card.save(db_pool).await
     }
 
@@ -128,38 +142,29 @@ impl CreateCard {
         };
     }
 
-    pub fn push_char(&mut self, ch: char) {
-        tracing::info!("{}", format!("pushing '{}' to {:?}", ch, self.state));
-        match self.state {
-            CurrentlyEditing::FrontText => {
-                // TODO: is this best way?
-                let mut text = self.card.front_text.clone().unwrap_or("".to_string());
-                text.push(ch);
-                self.card.set_front_text(text);
-            },
-            CurrentlyEditing::BackText => {
-                let mut text = self.card.back_text.clone().unwrap_or("".to_string());
-                text.push(ch);
-                self.card.set_back_text(text);
-            }
-            CurrentlyEditing::Saving => {}
-        }
-    }
-
-    pub fn pop_char(&mut self) {
-        //TODO: rewrite to store current cursor location
-        match self.state {
-            CurrentlyEditing::FrontText => {
-                let mut text = self.card.front_text.clone().unwrap_or("".to_string());
-                text.pop();
-                self.card.set_front_text(text);
-            },
-            CurrentlyEditing::BackText => {
-                let mut text = self.card.back_text.clone().unwrap_or("".to_string());
-                text.pop();
-                self.card.set_back_text(text);
-            }
-            CurrentlyEditing::Saving => {}
-        }
-    }
+    // pub fn input(&mut self, &mut app_mode: Mode, keycode: &KeyCode) {
+    //     // TODO:
+    //     // current thinking: `CreateCard` mutates global app start as parameter
+    //     // can pass &mut Mode to relevant text field (which also mutates)
+    //     match app_mode {
+    //         Mode::NORMAL => match keycode {},
+    //         Mode::INSERT => match keycode {},
+    //         _ => {}
+    //     }
+    //     match keycode {
+    //         KeyCode::Tab => self.toggle_field(),
+    //         _ => match self.state {
+    //             CurrentlyEditing::FrontText => {
+    //                 // TODO: Handle error
+    //                 let _ = self.front_text.insert(keycode);
+    //             }
+    //             CurrentlyEditing::BackText => {
+    //                 let _ = self.back_text.insert(keycode);
+    //             }
+    //             CurrentlyEditing::Saving => {
+    //                 todo!()
+    //             }
+    //         },
+    //     }
+    // }
 }

@@ -70,13 +70,15 @@ pub struct App<'a> {
     current_screen: CurrentScreen,
 
     // Persistent UI elements
-    create_screen: Option<CreateCard>,
+    create_screen: Option<CreateCard<'a>>,
     create_deck: Option<CreateDeck>,
     statusbar: Option<StatusBar>,
     alert: Option<AlertPopup<'a>>, // always appears in top-right (floating)
 
     mode: Mode,
     should_quit: bool,
+
+    cursor: Option<(usize, usize)>,
 
     // I don't want to clone the Deck, but don't know how to avoid it...?
     deck: Option<Deck>,
@@ -85,7 +87,6 @@ pub struct App<'a> {
     current_list: Vec<String>,
     pointer: ListState,
     n_items: usize, // number of items, e.g. list items, currently displayed
-    cursor_position: Option<(u16, u16)>,
 }
 
 impl<'a> Widget for &mut App<'a> {
@@ -172,7 +173,14 @@ impl<'a> Widget for &mut App<'a> {
                             // does the deck have cards?
                             Some(c) => c
                                 .iter()
-                                .map(|card| card.front_text.clone().unwrap())
+                                .map(|card| {
+                                    if let Some(text) = card.front_text.clone() {
+                                        text
+                                    } else {
+                                        tracing::warn!("invalid card, no text");
+                                        "".to_string()
+                                    }
+                                })
                                 .collect(),
                             None => Vec::new(),
                         }
@@ -272,7 +280,15 @@ impl<'a> Widget for &mut App<'a> {
 
             CurrentScreen::CreateCard => {
                 if let Some(create_screen) = &self.create_screen {
-                    create_screen.render(main_area, buf);
+                    if let Some(current_text_field) = create_screen.current_text_field() {
+                        let textfield = current_text_field.borrow();
+                        let cursor_in_text_field = textfield.cursor();
+                        if let Some(area_of_text_field) = textfield.coords() {
+                            let position = area_of_text_field.as_position();
+                            self.cursor = Some((cursor_in_text_field.0 + position.x as usize, cursor_in_text_field.1 + position.y as usize));
+                        };
+                        create_screen.render(main_area, buf);
+                    }
                 } else {
                     self.create_screen = Some(CreateCard::default());
                 }
@@ -309,7 +325,7 @@ impl<'a> App<'a> {
             db_pool,
             pointer: ListState::default(),
             n_items: 0usize,
-            cursor_position: todo!(),
+            cursor: None,
         }
     }
 
@@ -570,6 +586,7 @@ impl<'a> App<'a> {
                 // Create screen allows creation of new flashcard
                 CurrentScreen::CreateCard => {
                     if let Some(create_card) = &mut self.create_screen {
+                        // but then will not be able to make popup :(
                         match self.mode {
                             Mode::NORMAL => match &key.code {
                                 Char('q') => self.should_quit = true,
@@ -611,12 +628,14 @@ impl<'a> App<'a> {
                                 _ => {}
                             },
                             Mode::INSERT => {
-                                #[allow(clippy::single_match)]
-                                match &key.code {
-                                    KeyCode::Esc => self.mode = Mode::NORMAL,
-                                    KeyCode::Backspace => create_card.pop_char(),
-                                    Char(ch) => create_card.push_char(*ch),
-                                    _ => {} //TODO:
+                                if let Some(textfield) = create_card.current_text_field() {
+                                    match &key.code {
+                                        KeyCode::Esc => self.mode = Mode::NORMAL,
+                                        KeyCode::Backspace => textfield.borrow_mut().backspace(),
+                                        KeyCode::Enter => textfield.borrow_mut().insert_newline(),
+                                        Char(ch) => textfield.borrow_mut().insert_char(*ch),
+                                        _ => {} //TODO:
+                                    }
                                 }
                             }
                             Mode::SEARCH(_) => todo!(),
@@ -677,15 +696,7 @@ impl<'a> App<'a> {
         Ok(())
     }
 
-    async fn render_ui(mut self, f: &mut Frame<'_>) {
-        match self.mode {
-            Mode::NORMAL => {},
-            Mode::INSERT => {
-                f.set_cursor(2,2);
-            },
-            Mode::SEARCH(_) => {}, 
-        }
-    }
+
 
     pub async fn run(mut self, mut term: Tui) -> eyre::Result<()> {
         // Event handler
@@ -708,7 +719,12 @@ impl<'a> App<'a> {
 
             // Render
             // Must only call `draw()` once per pass; should render whole frame
-            term.draw(|f| f.render_widget(&mut self, f.size()))?;
+            term.draw(|f| {
+                if let Some(cursor) = self.cursor {
+                    f.set_cursor(cursor.0 as u16, cursor.1 as u16);
+                };
+                f.render_widget(&mut self, f.size());
+            })?;
         }
         Ok(())
     }
