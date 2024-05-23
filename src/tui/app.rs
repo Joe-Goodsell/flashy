@@ -601,6 +601,22 @@ impl<'a> App<'a> {
                             Mode::NORMAL => match &key.code {
                                 Char('q') => self.should_quit = true,
                                 Char('i') => self.mode = Mode::INSERT,
+                                Char('a') => {
+                                    self.mode = Mode::INSERT;
+                                    if let Some(tf) = create_card.current_text_field() {
+                                        tf.right();
+                                    }
+                                }
+                                Char('h') | KeyCode::Left => {
+                                    if let Some(tf) = create_card.current_text_field() {
+                                        tf.left();
+                                    }
+                                },
+                                Char('l') | KeyCode::Right => {
+                                    if let Some(tf) = create_card.current_text_field() {
+                                        tf.right();
+                                    }
+                                },
                                 KeyCode::Tab => {
                                     create_card.toggle_field();
                                 }
@@ -730,6 +746,7 @@ impl<'a> App<'a> {
             // Render
             // Must only call `draw()` once per pass; should render whole frame
             term.draw(|f| {
+                f.render_widget(&mut self, f.size());
                 tracing::info!("setting cursor...");
                 if let Some(cursor) = self.cursor {
                     tracing::info!("cursor exists");
@@ -738,7 +755,6 @@ impl<'a> App<'a> {
                 } else {
                     tracing::info!("no cursor found!");
                 };
-                f.render_widget(&mut self, f.size());
             })?;
         }
         Ok(())
