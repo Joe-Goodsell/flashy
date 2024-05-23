@@ -216,7 +216,7 @@ impl Searcher {
         let text_bytes = text.as_bytes();
 
         // TODO: return pointers to matching chars to highlight
-        let match_chars: Vec<&u8> = Vec::new();
+        // let match_chars: Vec<&u8> = Vec::new();
 
         if search_bytes.is_empty() {
             return true;

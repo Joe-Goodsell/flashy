@@ -47,7 +47,7 @@ impl DeckSet {
     }
 
     pub fn get_deck_by_id(&self, id: Uuid) -> Option<Deck> {
-        self.decks.iter().find(|d| d.id == id).map(|d| d.clone())
+        self.decks.iter().find(|d| d.id == id).cloned()
     }
 
     pub async fn reload(&mut self, db: &PgPool) -> Result<(), sqlx::Error> {

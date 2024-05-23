@@ -44,7 +44,9 @@ impl EventHandler {
 
                     maybe_event = crossterm_event => {
                         match maybe_event {
-                            Some(Ok(evt)) => {
+                            Some(Ok(evt)) => {                        
+                                #[allow(clippy::single_match)]
+                                #[allow(clippy::collapsible_match)]
                                 match evt {
                                     crossterm::event::Event::Key(key) => {
                                         if key.kind == crossterm::event::KeyEventKind::Press {

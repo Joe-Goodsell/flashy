@@ -1,11 +1,9 @@
-use std::{borrow::BorrowMut, cell::{RefCell, RefMut}, rc::Rc};
-
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::Span,
-    widgets::{Block, Borders, Padding, Paragraph, Widget},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 
 use sqlx::PgPool;
@@ -14,9 +12,6 @@ use crate::{
     domain::card::Card,
     tui::{app::Mode, panes::text_field::TextField, utils::create_centred_rect_by_percent},
 };
-
-const TEXTBOX_STYLE_EDITING: Style = Style::new().fg(Color::Yellow);
-const TEXTBOX_STYLE_VIEWING: Style = Style::new().fg(Color::LightBlue);
 
 #[derive(Debug, Clone)]
 pub struct CreateCard<'a> {
@@ -96,9 +91,9 @@ impl<'a> Widget for &mut CreateCard<'a> {
             ])
             .margin(2)
             .split(popup_area);
-        let text_field_block = Block::default()
-            .borders(Borders::ALL)
-            .padding(Padding::uniform(1));
+        // let text_field_block = Block::default()
+        //     .borders(Borders::ALL)
+        //     .padding(Padding::uniform(1));
 
         //POPUP
         Paragraph::default().block(block).render(popup_area, buf);

@@ -25,7 +25,7 @@ use ratatui::{
     text::Line,
     widgets::{
         block::{Position, Title},
-        Block, Borders, List, ListState, Padding, Paragraph, Widget,
+        Block, Borders, ListState, Padding, Paragraph, Widget,
     },
 };
 
