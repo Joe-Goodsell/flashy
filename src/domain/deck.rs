@@ -122,4 +122,8 @@ impl Deck {
             None => Err(std::io::Error::new(std::io::ErrorKind::Other, "No cards available")),
         }
     }
+
+    pub fn cards_iter(&self) -> Option<impl Iterator<Item = Card>> {
+        self.cards.clone().map(|cards| cards.into_iter())
+    }
 }

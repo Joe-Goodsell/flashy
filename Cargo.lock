@@ -500,6 +500,7 @@ dependencies = [
  "config",
  "crossterm",
  "futures",
+ "rand",
  "ratatui",
  "secrecy",
  "serde",
